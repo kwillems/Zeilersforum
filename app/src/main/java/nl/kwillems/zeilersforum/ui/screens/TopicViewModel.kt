@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import nl.kwillems.zeilersforum.ZfApp
 import nl.kwillems.zeilersforum.data.ForumParser
+import nl.kwillems.zeilersforum.data.OnlineMember
 import nl.kwillems.zeilersforum.data.Post
 import nl.kwillems.zeilersforum.data.PostOrder
 import nl.kwillems.zeilersforum.data.TopicPage
@@ -30,6 +31,8 @@ data class TopicState(
     val error: String? = null,
     val replyUrl: String? = null,
     val loggedIn: Boolean = false,
+    /** "Wie leest er mee?" (alleen als je bent ingelogd). */
+    val readers: List<OnlineMember> = emptyList(),
 )
 
 /**
@@ -75,6 +78,7 @@ class TopicViewModel(
                 totalPages = page.totalPages,
                 replyUrl = page.replyUrl ?: it.replyUrl,
                 loggedIn = page.loggedIn,
+                readers = page.readers ?: if (page.loggedIn) it.readers else emptyList(),
             )
         }
     }

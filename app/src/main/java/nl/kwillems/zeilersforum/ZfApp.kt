@@ -35,6 +35,11 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
             .build()
         forum = ForumRepository(client, cookies, CredentialStore(this))
         settings = SettingsRepository(this)
+        if (BuildConfig.DEBUG) {
+            // Alleen de testversie: laatst opgehaalde onderwerppagina bewaren (app-privé map).
+            val dir = java.io.File(filesDir, "debug").apply { mkdirs() }
+            forum.debugDump = { name, html -> runCatching { java.io.File(dir, "$name.html").writeText(html) } }
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

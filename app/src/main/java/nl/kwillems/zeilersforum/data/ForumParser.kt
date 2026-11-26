@@ -144,7 +144,45 @@ object ForumParser {
             perPage = perPage,
             replyUrl = findReplyUrl(doc),
             loggedIn = isLoggedIn(doc),
+            readers = parseReaders(doc),
         )
+    }
+
+    /**
+     * Het blok "Wie leest er mee?" boven een onderwerp: een kop met daarna de namen
+     * (links naar profielen). Alleen aanwezig als je bent ingelogd.
+     */
+    fun parseReaders(doc: Document): List<OnlineMember>? {
+        val heading = doc.getElementsContainingOwnText("Wie leest er mee").firstOrNull() ?: return null
+        val links = mutableListOf<Element>()
+        // De namen staan in de elementen direct na de kop (of na het blok waar de kop in staat).
+        var anchor: Element? = heading
+        while (anchor != null && anchor.nextElementSibling() == null) anchor = anchor.parent()
+        var el = anchor?.nextElementSibling()
+        while (el != null && links.size < 500) {
+            if (el.hasClass("klist-actions") || el.hasClass("kblock") || el.selectFirst("table.kmsg, div.kmsg-header") != null) break
+            val found = if (isProfileLink(el)) listOf(el) else el.select("a[href]").filter { isProfileLink(it) }
+            if (found.isEmpty()) break
+            links += found
+            el = el.nextElementSibling()
+        }
+        // Soms staan de namen in hetzelfde element als de kop.
+        if (links.isEmpty()) links += heading.parent()?.select("a[href]")?.filter { isProfileLink(it) }.orEmpty()
+        return links.map { a -> OnlineMember(a.text().trim(), fixUrl(a.absUrl("href")), roleOf(a)) }
+            .filter { it.name.isNotBlank() }
+            .distinctBy { it.name }
+    }
+
+    private fun isProfileLink(a: Element): Boolean =
+        a.tagName() == "a" && (a.className().contains("kwho-") ||
+            a.attr("href").let { it.contains("mijn-profiel") || it.contains("mijn-gegevens") || it.contains("comprofiler") || it.contains("/profile") })
+
+    private fun roleOf(a: Element): MemberRole = when {
+        a.hasClass("kwho-admin") -> MemberRole.ADMIN
+        a.hasClass("kwho-globalmoderator") -> MemberRole.GLOBAL_MODERATOR
+        a.hasClass("kwho-moderator") -> MemberRole.MODERATOR
+        a.hasClass("kwho-banned") -> MemberRole.BANNED
+        else -> MemberRole.USER
     }
 
     private fun parsePost(header: Element, table: Element): Post {

@@ -32,6 +32,15 @@ data class TopicsPage(
     val loggedIn: Boolean = false,
 )
 
+enum class MemberRole(val label: String) {
+    ADMIN("Websitebeheerder"), GLOBAL_MODERATOR("Algemene moderator"), MODERATOR("Moderator"),
+    USER("Gebruiker"), BANNED("Geblokkeerd"),
+}
+
+data class OnlineMember(val name: String, val profileUrl: String, val role: MemberRole)
+
+
+
 data class Category(
     val name: String,
     val url: String,
@@ -108,6 +117,8 @@ data class TopicPage(
     val perPage: Int,
     val replyUrl: String?,
     val loggedIn: Boolean,
+    /** "Wie leest er mee?": leden die dit onderwerp nu bekijken (alleen zichtbaar als je bent ingelogd). */
+    val readers: List<OnlineMember>? = null,
 )
 
 typealias ReplyForm = PostForm

@@ -30,6 +30,9 @@ class ForumRepository(
 
     private val loginMutex = Mutex()
 
+    /** Alleen in de testversie: bewaart opgehaalde HTML lokaal om de opbouw van de site te bekijken. */
+    var debugDump: ((name: String, html: String) -> Unit)? = null
+
     // ---------- HTTP ----------
 
     /** GET; bij een tijdelijke serverfout (5xx) wordt het na een korte pauze nog één keer geprobeerd. */
@@ -105,6 +108,7 @@ class ForumRepository(
             page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
         }
         _loggedIn.value = page.loggedIn
+        debugDump?.invoke(if (page.loggedIn) "topic_ingelogd" else "topic_gast", html)
         return page
     }
 

@@ -41,6 +41,23 @@ class ForumParserTest {
         assertEquals(25, p.perPage)
         assertTrue(p.posts.all { it.author.isNotBlank() && it.id.isNotBlank() })
         assertTrue(p.posts.any { post -> post.blocks.any { it is Block.Quote } })
+        assertEquals(null, p.readers) // als gast staat "Wie leest er mee?" er niet
+    }
+
+    @Test fun readersBlock() {
+        // Opbouw zoals op de site als je bent ingelogd: een kop, daarna de namen als profiellinks.
+        val html = """<html><body><div id="Kunena">
+            <h2>Wie leest er mee?</h2>
+            <div><a class="kwho-user" href="http://www.zeilersforum.nl/index.php/mijn-gegevens-mijn-menu-21/6718-hans-v">Hans V</a>
+            <a class="kwho-user" href="/index.php/mijn-gegevens-mijn-menu-21/kwillems">kwillems</a>
+            <a class="kwho-moderator" href="/index.php/mijn-gegevens-mijn-menu-21/1-nostres">Nostres</a>
+            <a class="kwho-user" href="/index.php/mijn-gegevens-mijn-menu-21/2-pam49">pam49</a></div>
+            <table class="klist-actions"><tr><td><a href="/x/reply">Antwoord onderwerp</a></td></tr></table>
+            </div></body></html>"""
+        val readers = ForumParser.parseReaders(org.jsoup.Jsoup.parse(html, "https://zeilersforum.nl/index.php/x"))!!
+        assertEquals(listOf("Hans V", "kwillems", "Nostres", "pam49"), readers.map { it.name })
+        assertEquals(MemberRole.MODERATOR, readers[2].role)
+        assertTrue(readers.all { it.profileUrl.startsWith("https://zeilersforum.nl/") })
     }
 
     @Test fun photoTopic() {

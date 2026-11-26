@@ -82,6 +82,7 @@ import nl.kwillems.zeilersforum.data.PostOrder
 import nl.kwillems.zeilersforum.data.Settings
 import nl.kwillems.zeilersforum.ui.components.ErrorPane
 import nl.kwillems.zeilersforum.ui.components.PostContent
+import nl.kwillems.zeilersforum.ui.components.ReadersCard
 import nl.kwillems.zeilersforum.ui.components.ShowPhotoButton
 import nl.kwillems.zeilersforum.ui.components.autoLoadImages
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -216,6 +217,9 @@ fun TopicScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    if (state.readers.isNotEmpty()) item(key = "readers") {
+                        ReadersCard(state.readers, Modifier.widthIn(max = 960.dp).fillMaxWidth())
+                    }
                     items(state.posts, key = { it.id.ifBlank { it.hashCode().toString() } }) { post ->
                         PostCard(
                             post = post,
