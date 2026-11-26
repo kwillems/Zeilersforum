@@ -66,7 +66,7 @@ fun PostContent(
 }
 
 @Composable
-fun HtmlText(html: String, modifier: Modifier = Modifier) {
+fun HtmlText(html: String, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     val linkColor = MaterialTheme.colorScheme.primary
     val text = remember(html, linkColor) {
         AnnotatedString.fromHtml(
@@ -74,7 +74,10 @@ fun HtmlText(html: String, modifier: Modifier = Modifier) {
             linkStyles = TextLinkStyles(style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
         )
     }
-    Text(text, style = MaterialTheme.typography.bodyLarge, modifier = modifier)
+    Text(
+        text, style = MaterialTheme.typography.bodyLarge, modifier = modifier,
+        maxLines = maxLines, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

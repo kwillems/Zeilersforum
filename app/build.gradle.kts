@@ -22,8 +22,8 @@ android {
         applicationId = "nl.kwillems.zeilersforum"
         minSdk = 26
         targetSdk = 37
-        versionCode = 300
-        versionName = "3.0.0"
+        versionCode = 301
+        versionName = "3.0.1"
     }
 
     signingConfigs {
@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    implementation(libs.compose.material3.navigation.suite)
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.okhttp)
@@ -84,4 +85,11 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.junit)
+}
+
+// Parser-tests gebruiken opgeslagen forumpagina's uit de map in ZF_FIXTURES (niet in versiebeheer).
+tasks.withType<Test>().configureEach {
+    System.getenv("ZF_FIXTURES")?.let { environment("ZF_FIXTURES", it) }
 }

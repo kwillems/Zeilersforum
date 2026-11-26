@@ -21,13 +21,15 @@ import nl.kwillems.zeilersforum.ui.screens.ReplyViewModel
 import nl.kwillems.zeilersforum.ui.screens.SettingsScreen
 import nl.kwillems.zeilersforum.ui.screens.TopicScreen
 import nl.kwillems.zeilersforum.ui.screens.TopicViewModel
-import nl.kwillems.zeilersforum.ui.screens.TopicsScreen
-import nl.kwillems.zeilersforum.ui.screens.TopicsViewModel
+import nl.kwillems.zeilersforum.ui.screens.CategoryScreen
+import nl.kwillems.zeilersforum.ui.screens.HomeScreen
+import nl.kwillems.zeilersforum.ui.screens.TopicListViewModel
 
 @Serializable object TopicsRoute
 @Serializable data class TopicRoute(val url: String, val title: String = "", val lastPageUrl: String? = null)
 @Serializable data class ImagesRoute(val index: Int)
-@Serializable data class ReplyRoute(val replyUrl: String, val topicTitle: String, val quote: String? = null)
+@Serializable data class ReplyRoute(val replyUrl: String, val topicTitle: String, val quote: String? = null, val newTopic: Boolean = false)
+@Serializable data class CategoryRoute(val url: String, val title: String)
 @Serializable object LoginRoute
 @Serializable object SettingsRoute
 
@@ -58,12 +60,27 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
         popExitTransition = { slideOutHorizontally { it / 4 } + fadeOut() },
     ) {
         composable<TopicsRoute> {
-            val vm = viewModel { TopicsViewModel(app) }
-            TopicsScreen(
-                vm = vm,
-                onOpenTopic = { t -> nav.navigate(TopicRoute(t.url, t.title, t.lastPostUrl)) },
+            HomeScreen(
+                app = app,
+                onOpenTopic = { url, title, last -> nav.navigate(TopicRoute(url, title, last)) },
+                onOpenCategory = { c -> nav.navigate(CategoryRoute(c.url, c.name)) },
                 onSettings = { nav.navigate(SettingsRoute) },
                 onLogin = { nav.navigate(LoginRoute) },
+            )
+        }
+        composable<CategoryRoute> { entry ->
+            val route = entry.toRoute<CategoryRoute>()
+            val vm = viewModel { TopicListViewModel(app, route.url) }
+            CategoryScreen(
+                vm = vm,
+                title = route.title,
+                url = route.url,
+                refreshRequest = entry.savedStateHandle.getStateFlow(REFRESH_KEY, false),
+                onRefreshHandled = { entry.savedStateHandle[REFRESH_KEY] = false },
+                onBack = { nav.popBackStack() },
+                onOpenTopic = { t -> nav.navigate(TopicRoute(t.url, t.title, t.lastPostUrl)) },
+                onOpenCategory = { c -> nav.navigate(CategoryRoute(c.url, c.name)) },
+                onNewTopic = { create, name -> nav.navigate(ReplyRoute(create, name, null, newTopic = true)) },
             )
         }
         composable<TopicRoute> { entry ->
@@ -90,13 +107,14 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
         }
         composable<ReplyRoute> { entry ->
             val route = entry.toRoute<ReplyRoute>()
-            val vm = viewModel { ReplyViewModel(app, route.replyUrl, route.topicTitle, route.quote) }
+            val vm = viewModel { ReplyViewModel(app, route.replyUrl, route.topicTitle, route.quote, route.newTopic) }
             ReplyScreen(
                 vm = vm,
                 onBack = { nav.popBackStack() },
-                onPosted = {
+                onPosted = { newTopicUrl ->
                     nav.previousBackStackEntry?.savedStateHandle?.set(REFRESH_KEY, true)
                     nav.popBackStack()
+                    if (newTopicUrl != null) nav.navigate(TopicRoute(newTopicUrl))
                 },
                 onLogin = { nav.navigate(LoginRoute) },
             )

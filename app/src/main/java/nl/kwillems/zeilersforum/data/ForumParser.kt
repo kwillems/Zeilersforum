@@ -42,7 +42,78 @@ object ForumParser {
             )
         }
         val (page, total) = pagination(doc)
-        return TopicsPage(topics, page, total)
+        return TopicsPage(
+            topics = topics,
+            page = page,
+            totalPages = total,
+            perPage = perPage(doc, default = 40),
+            subcategories = categoryRows(doc.select("table.kblocktable[id^=kcat] tr[id^=kcat]")),
+            createUrl = doc.select("a[href]").map { it.absUrl("href") }.firstOrNull { it.contains("/topic/create") || it.contains("layout=create") },
+            title = doc.selectFirst("div.kheader h1 span, div.kheader h2 span")?.text()?.trim().orEmpty(),
+            loggedIn = isLoggedIn(doc),
+        )
+    }
+
+    // ---------- Forumindex en categorieën ----------
+
+    fun parseIndex(html: String, url: String): List<Section> {
+        val doc = Jsoup.parse(html, url)
+        return doc.select("div.kblock[class*=kcategories-]").mapNotNull { block ->
+            val head = block.selectFirst("div.kheader h1 a, div.kheader h2 a") ?: return@mapNotNull null
+            val cats = categoryRows(block.select("table.kblocktable tr[id^=kcat]"))
+            if (cats.isEmpty()) null else Section(head.text(), head.absUrl("href"), cats)
+        }
+    }
+
+    private fun categoryRows(rows: List<Element>): List<Category> = rows.mapNotNull { row ->
+        val link = row.selectFirst("div.kthead-title a") ?: return@mapNotNull null
+        val last = row.selectFirst("div.klatest-subject a")
+        Category(
+            name = link.text(),
+            url = link.absUrl("href"),
+            description = row.selectFirst("div.kthead-desc")?.text().orEmpty(),
+            topics = row.selectFirst("span.kcat-topics-number")?.text().orEmpty(),
+            replies = row.selectFirst("span.kcat-replies-number")?.text().orEmpty(),
+            lastTopic = last?.attr("title")?.substringAfter("onderwerp '")?.removeSuffix("'")?.ifBlank { null } ?: last?.text().orEmpty(),
+            lastBy = row.selectFirst("div.klatest-subject-by a")?.text().orEmpty(),
+            lastAgo = row.selectFirst("div.klatest-subject-by span[title]")?.attr("title").orEmpty(),
+            lastUrl = last?.absUrl("href"),
+            children = row.select("div.kcc-subcat a, .kcc-table a[href]")
+                .filter { it.text().isNotBlank() && !it.attr("href").contains("#") }
+                .map { it.text() to it.absUrl("href") }
+                .distinctBy { it.second },
+        )
+    }
+
+    // ---------- Zoeken ----------
+
+    fun parseSearch(html: String, url: String): SearchPage {
+        val doc = Jsoup.parse(html, url)
+        val block = doc.selectFirst("div.ksearchresult")
+        val results = block?.select("table:has(> thead tr.ksth)")?.mapNotNull { t ->
+            val title = t.selectFirst("div.kresult-title a, span.kmsgtitle a") ?: return@mapNotNull null
+            val date = t.selectFirst("span.kdate")
+            SearchResult(
+                title = title.text(),
+                url = title.absUrl("href"),
+                author = t.selectFirst("li.kpost-username a, li.kpost-username")?.text().orEmpty(),
+                avatar = t.selectFirst("img.kavatar")?.absUrl("src")?.let(::fixUrl),
+                date = date?.text().orEmpty(),
+                dateAgo = date?.attr("title").orEmpty(),
+                snippetHtml = t.selectFirst("div.kmsgtext")?.let { el ->
+                    val c = el.clone()
+                    c.select("img").forEach { img -> if (isSmiley(img)) img.replaceWith(TextNode(smileyText(img))) else img.remove() }
+                    c.select("div.kmsgtext-quote").remove()
+                    c.html()
+                }.orEmpty(),
+                category = t.selectFirst("div.resultcat a")?.text().orEmpty(),
+            )
+        }.orEmpty()
+        val nav = block?.selectFirst("ul.kpagination")
+        val current = nav?.selectFirst("span.pagenav")?.text()?.toIntOrNull() ?: 1
+        val max = nav?.select(".pagenav")?.mapNotNull { it.text().toIntOrNull() }?.maxOrNull() ?: current
+        val total = Regex("van (\\d+) resultaten").find(block?.text().orEmpty())?.groupValues?.get(1)?.toIntOrNull() ?: results.size
+        return SearchPage(results, current, maxOf(current, max), total)
     }
 
     // ---------- Een onderwerp ----------
@@ -126,14 +197,14 @@ object ForumParser {
     }
 
     /** Aantal berichten per pagina, afgeleid uit de ?start= van pagina 2. */
-    private fun perPage(doc: Document): Int {
-        val nav = doc.selectFirst("td.klist-pages-all ul.kpagination") ?: return 25
+    private fun perPage(doc: Document, default: Int = 25): Int {
+        val nav = doc.selectFirst("td.klist-pages-all ul.kpagination") ?: return default
         for (a in nav.select("a.pagenav")) {
             val n = a.text().toIntOrNull() ?: continue
             val start = Regex("[?&]start=(\\d+)").find(a.attr("href"))?.groupValues?.get(1)?.toIntOrNull() ?: continue
             if (n > 1 && start > 0) return start / (n - 1)
         }
-        return 25
+        return default
     }
 
     // ---------- Inhoud van een bericht ----------
@@ -251,24 +322,41 @@ object ForumParser {
     fun loginError(html: String): String? =
         Jsoup.parse(html).selectFirst("div.alert-error div.alert-message, div.alert-message")?.text()
 
-    fun replyForm(html: String, url: String, fallbackSubject: String): ReplyForm {
+    /**
+     * Het berichtformulier van Kunena (voor een reactie of een nieuw onderwerp).
+     * Neemt verborgen velden en de gekozen waarden van keuzelijsten over.
+     */
+    fun postForm(html: String, url: String, fallbackSubject: String): PostForm {
         val doc = Jsoup.parse(html, url)
         val form = doc.selectFirst("form#postform, form[name=postform]")
             ?: doc.select("form").firstOrNull { it.selectFirst("textarea[name=message]") != null }
-            ?: throw if (doc.selectFirst("input[name=passwd]") != null) NotLoggedInException()
-            else ForumException("Reactieformulier niet gevonden")
+            ?: throw when {
+                doc.selectFirst("input[name=passwd]") != null -> NotLoggedInException()
+                else -> ForumException(pageError(html) ?: "Formulier niet gevonden")
+            }
         val fields = LinkedHashMap<String, String>()
         form.select("input[type=hidden]").forEach { if (it.attr("name").isNotBlank()) fields[it.attr("name")] = it.attr("value") }
+        form.select("select[name]").forEach { sel ->
+            val name = sel.attr("name")
+            if (name.endsWith("[]")) return@forEach
+            val opt = sel.selectFirst("option[selected]") ?: sel.selectFirst("option:not([disabled])")
+            if (opt != null && name !in fields) fields[name] = opt.attr("value")
+        }
+        form.select("input[type=radio][checked], input[type=checkbox][checked]").forEach {
+            if (it.attr("name").isNotBlank() && it.attr("name") !in fields) fields[it.attr("name")] = it.attr("value")
+        }
         val subject = form.selectFirst("input[name=subject]")?.attr("value")?.takeIf { it.isNotBlank() } ?: fallbackSubject
-        // Net als de oorspronkelijke app wordt naar de reactie-URL zelf gepost.
-        return ReplyForm(postUrl = url, fields = fields, subject = subject)
+        // Net als de oorspronkelijke app wordt naar de URL van het formulier zelf gepost.
+        return PostForm(postUrl = url, fields = fields, subject = subject)
     }
+
+    fun replyForm(html: String, url: String, fallbackSubject: String): ReplyForm = postForm(html, url, fallbackSubject)
 
     fun replySucceeded(html: String): Boolean =
         html.contains("Bericht succesvol geplaatst")
 
     fun pageError(html: String): String? =
-        Jsoup.parse(html).selectFirst("div.alert-error div.alert-message, div.alert-error")?.text()
+        Jsoup.parse(html).selectFirst("div.alert-error div.alert-message, div.alert-error, div.alert-message")?.text()
 
     // ---------- Hulpfuncties ----------
 

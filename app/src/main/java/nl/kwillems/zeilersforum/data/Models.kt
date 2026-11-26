@@ -23,6 +23,48 @@ data class TopicsPage(
     val topics: List<TopicSummary>,
     val page: Int,
     val totalPages: Int,
+    val perPage: Int = 40,
+    /** Subcategorieën die boven de onderwerpen staan (bij een categoriepagina). */
+    val subcategories: List<Category> = emptyList(),
+    /** Link "Nieuw onderwerp" (alleen als je bent ingelogd en het mag). */
+    val createUrl: String? = null,
+    val title: String = "",
+    val loggedIn: Boolean = false,
+)
+
+data class Category(
+    val name: String,
+    val url: String,
+    val description: String,
+    val topics: String,
+    val replies: String,
+    val lastTopic: String,
+    val lastBy: String,
+    val lastAgo: String,
+    val lastUrl: String?,
+    val children: List<Pair<String, String>> = emptyList(),
+)
+
+data class Section(val name: String, val url: String, val categories: List<Category>)
+
+data class SearchResult(
+    val title: String,
+    val url: String,
+    val author: String,
+    val avatar: String?,
+    val date: String,
+    val dateAgo: String,
+    val snippetHtml: String,
+    val category: String,
+)
+
+data class SearchPage(val results: List<SearchResult>, val page: Int, val totalPages: Int, val total: Int)
+
+/** Een te verzenden forumformulier (reactie of nieuw onderwerp). */
+data class PostForm(
+    val postUrl: String,
+    val fields: LinkedHashMap<String, String>,
+    val subject: String,
 )
 
 /** Inhoud van een bericht, opgesplitst in blokken die Compose kan tonen. */
@@ -68,11 +110,7 @@ data class TopicPage(
     val loggedIn: Boolean,
 )
 
-data class ReplyForm(
-    val postUrl: String,
-    val fields: LinkedHashMap<String, String>,
-    val subject: String,
-)
+typealias ReplyForm = PostForm
 
 enum class PostOrder { OLDEST_FIRST, NEWEST_FIRST }
 

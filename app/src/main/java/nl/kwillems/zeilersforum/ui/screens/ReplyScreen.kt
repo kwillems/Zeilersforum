@@ -76,6 +76,7 @@ import java.io.ByteArrayOutputStream
 import kotlin.math.max
 
 data class ReplyState(
+    val subject: String = "",
     val text: String = "",
     val photos: List<Uri> = emptyList(),
     val form: ReplyForm? = null,
@@ -84,6 +85,8 @@ data class ReplyState(
     val needsLogin: Boolean = false,
     val error: String? = null,
     val posted: Boolean = false,
+    /** Na een nieuw onderwerp: de link ernaartoe. */
+    val newTopicUrl: String? = null,
 )
 
 class ReplyViewModel(
@@ -91,6 +94,8 @@ class ReplyViewModel(
     private val replyUrl: String,
     private val topicTitle: String,
     quote: String?,
+    /** true = nieuw onderwerp starten; [replyUrl] is dan de link "Nieuw onderwerp". */
+    val newTopic: Boolean = false,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReplyState(text = quote.orEmpty()))
     val state: StateFlow<ReplyState> = _state
@@ -101,7 +106,7 @@ class ReplyViewModel(
     fun loadForm() {
         viewModelScope.launch {
             _state.update { it.copy(loadingForm = true, error = null, needsLogin = false) }
-            runCatching { app.forum.replyForm(replyUrl, topicTitle) }
+            runCatching { if (newTopic) app.forum.newTopicForm(replyUrl) else app.forum.replyForm(replyUrl, topicTitle) }
                 .onSuccess { f -> _state.update { it.copy(form = f, loadingForm = false) } }
                 .onFailure { e ->
                     _state.update {
@@ -112,6 +117,10 @@ class ReplyViewModel(
     }
 
     fun setText(t: String) = _state.update { it.copy(text = t) }
+    fun setSubject(t: String) = _state.update { it.copy(subject = t) }
+
+    fun canSend(s: ReplyState = _state.value) =
+        s.form != null && (s.text.isNotBlank() || s.photos.isNotEmpty()) && (!newTopic || s.subject.isNotBlank())
     fun addPhotos(uris: List<Uri>) = _state.update { it.copy(photos = (it.photos + uris).distinct().take(MAX_PHOTOS)) }
     fun removePhoto(uri: Uri) = _state.update { it.copy(photos = it.photos - uri) }
     fun clearError() = _state.update { it.copy(error = null) }
@@ -119,7 +128,7 @@ class ReplyViewModel(
     fun send(context: Context) {
         val s = _state.value
         val form = s.form ?: return
-        if (s.text.isBlank() && s.photos.isEmpty()) return
+        if (!canSend(s)) return
         viewModelScope.launch {
             _state.update { it.copy(sending = true, error = null) }
             runCatching {
@@ -130,9 +139,10 @@ class ReplyViewModel(
                 }
                 val settings = app.settings.settings.first()
                 val signature = settings.signatureText.takeIf { settings.appSignature }
-                app.forum.postReply(form, s.text, images, signature)
-            }.onSuccess {
-                _state.update { it.copy(sending = false, posted = true) }
+                if (newTopic) app.forum.createTopic(form, s.subject, s.text, images, signature)
+                else { app.forum.postReply(form, s.text, images, signature); null }
+            }.onSuccess { url ->
+                _state.update { it.copy(sending = false, posted = true, newTopicUrl = url) }
             }.onFailure { e ->
                 _state.update { it.copy(sending = false, error = e.friendly()) }
             }
@@ -177,7 +187,7 @@ class ReplyViewModel(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: () -> Unit, onLogin: () -> Unit) {
+fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: String?) -> Unit, onLogin: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -185,7 +195,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: () -> Unit, on
         ActivityResultContracts.PickMultipleVisualMedia(ReplyViewModel.MAX_PHOTOS),
     ) { uris -> vm.addPhotos(uris) }
 
-    LaunchedEffect(state.posted) { if (state.posted) onPosted() }
+    LaunchedEffect(state.posted) { if (state.posted) onPosted(state.newTopicUrl) }
     LaunchedEffect(state.error) {
         state.error?.let { snackbar.showSnackbar(it); vm.clearError() }
     }
@@ -196,7 +206,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: () -> Unit, on
             TopAppBar(
                 title = {
                     Column {
-                        Text("Reageren")
+                        Text(if (vm.newTopic) "Nieuw onderwerp" else "Reageren")
                         Text(vm.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
@@ -207,7 +217,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: () -> Unit, on
                     } else {
                         IconButton(
                             onClick = { vm.send(ctx) },
-                            enabled = state.form != null && (state.text.isNotBlank() || state.photos.isNotEmpty()),
+                            enabled = vm.canSend(state),
                         ) { Icon(Icons.AutoMirrored.Filled.Send, "Versturen") }
                     }
                 },
@@ -218,21 +228,30 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: () -> Unit, on
             when {
                 state.loadingForm -> CircularProgressIndicator(Modifier.padding(32.dp))
                 state.needsLogin -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Je moet ingelogd zijn om te reageren.")
+                    Text(if (vm.newTopic) "Je moet ingelogd zijn om een onderwerp te starten." else "Je moet ingelogd zijn om te reageren.")
                     Button(onClick = onLogin, modifier = Modifier.padding(top = 16.dp)) { Text("Inloggen") }
                 }
                 state.form == null -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Het reactieformulier kon niet worden geladen.")
+                    Text(state.error ?: "Het formulier kon niet worden geladen.")
                     Button(onClick = vm::loadForm, modifier = Modifier.padding(top = 16.dp)) { Text("Opnieuw") }
                 }
                 else -> Column(
                     Modifier.widthIn(max = 840.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    if (vm.newTopic) OutlinedTextField(
+                        value = state.subject,
+                        onValueChange = vm::setSubject,
+                        label = { Text("Onderwerp") },
+                        singleLine = true,
+                        enabled = !state.sending,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     OutlinedTextField(
                         value = state.text,
                         onValueChange = vm::setText,
-                        label = { Text("Je reactie") },
+                        label = { Text(if (vm.newTopic) "Je bericht" else "Je reactie") },
                         minLines = 8,
                         enabled = !state.sending,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
