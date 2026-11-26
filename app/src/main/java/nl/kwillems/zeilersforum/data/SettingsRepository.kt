@@ -17,6 +17,9 @@ data class Settings(
     val appSignature: Boolean = true,
     val signatureText: String = DEFAULT_SIGNATURE,
     val imageMode: ImageMode = ImageMode.ALWAYS,
+    /** Eens per dag bij het openen kijken of er een nieuwe versie op GitHub staat. */
+    val autoCheckUpdates: Boolean = true,
+    val lastUpdateCheck: Long = 0,
 )
 
 /** Wanneer foto's in berichten automatisch worden geladen. */
@@ -36,6 +39,8 @@ class SettingsRepository(private val context: Context) {
             imageMode = p[IMAGE_MODE]?.let { runCatching { ImageMode.valueOf(it) }.getOrNull() }
                 // Overgang van de oude aan/uit-schakelaar.
                 ?: if (p[IMAGES] == false) ImageMode.ON_TAP else ImageMode.ALWAYS,
+            autoCheckUpdates = p[AUTO_UPDATE] ?: true,
+            lastUpdateCheck = p[LAST_UPDATE_CHECK] ?: 0,
         )
     }
 
@@ -43,6 +48,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemeMode(v: ThemeMode) = context.dataStore.edit { it[THEME] = v.name }
     suspend fun setDynamicColor(v: Boolean) = context.dataStore.edit { it[DYNAMIC] = v }
     suspend fun setAppSignature(v: Boolean) = context.dataStore.edit { it[SIGNATURE] = v }
+    suspend fun setAutoCheckUpdates(v: Boolean) = context.dataStore.edit { it[AUTO_UPDATE] = v }
+    suspend fun setLastUpdateCheck(v: Long) = context.dataStore.edit { it[LAST_UPDATE_CHECK] = v }
     suspend fun setImageMode(v: ImageMode) = context.dataStore.edit { it[IMAGE_MODE] = v.name; it.remove(IMAGES) }
 
     /** Lege tekst = terug naar de standaardondertekening. */
@@ -57,6 +64,8 @@ class SettingsRepository(private val context: Context) {
         val SIGNATURE = booleanPreferencesKey("app_signature")
         val IMAGES = booleanPreferencesKey("load_images")
         val IMAGE_MODE = stringPreferencesKey("image_mode")
+        val AUTO_UPDATE = booleanPreferencesKey("auto_check_updates")
+        val LAST_UPDATE_CHECK = androidx.datastore.preferences.core.longPreferencesKey("last_update_check")
         val SIGNATURE_TEXT = stringPreferencesKey("signature_text")
     }
 }

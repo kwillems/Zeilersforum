@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Nodig voor "Foto's alleen via wifi" -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Nodig om een update (APK van de eigen GitHub-releases) te laten installeren -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".ZfApp"
@@ -41,5 +43,15 @@
                 <data android:pathPrefix="/index.php/forum-" />
             </intent-filter>
         </activity>
+        <!-- Deelt de gedownloade update met de installatie van Android -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
 </manifest>

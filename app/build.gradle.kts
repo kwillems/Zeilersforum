@@ -24,6 +24,8 @@ android {
         targetSdk = 37
         versionCode = 302
         versionName = "3.0.2"
+        // Alleen om het updatemechanisme te testen: ./gradlew assembleRelease -PtestVersion=3.0.1
+        (project.findProperty("testVersion") as String?)?.let { versionName = it; versionCode = 1 }
     }
 
     signingConfigs {

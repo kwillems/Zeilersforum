@@ -23,6 +23,8 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var settings: SettingsRepository
         private set
+    lateinit var updates: nl.kwillems.zeilersforum.data.UpdateManager
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -35,6 +37,7 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
             .build()
         forum = ForumRepository(client, cookies, CredentialStore(this))
         settings = SettingsRepository(this)
+        updates = nl.kwillems.zeilersforum.data.UpdateManager(this, client, settings)
         if (BuildConfig.DEBUG) {
             // Alleen de testversie: laatst opgehaalde onderwerppagina bewaren (app-privé map).
             val dir = java.io.File(filesDir, "debug").apply { mkdirs() }

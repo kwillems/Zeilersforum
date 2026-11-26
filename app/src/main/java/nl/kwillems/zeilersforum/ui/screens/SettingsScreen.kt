@@ -3,6 +3,8 @@ package nl.kwillems.zeilersforum.ui.screens
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Edit
@@ -175,11 +177,9 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
                 modifier = Modifier.selectable(selected = false, onClick = onLogin, role = Role.Button),
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            ListItem(
-                headlineContent = { Text("Zeilersforum-app") },
-                supportingContent = { Text("Versie ${BuildConfig.VERSION_NAME}") },
-                leadingContent = { Icon(Icons.Filled.Info, null) },
-            )
+            Section("Updates")
+            nl.kwillems.zeilersforum.ui.components.UpdateSection(app)
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

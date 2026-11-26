@@ -69,6 +69,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -111,6 +112,17 @@ fun HomeScreen(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val loggedIn by app.forum.loggedIn.collectAsStateWithLifecycle()
     val pmUnread by app.forum.pmUnread.collectAsStateWithLifecycle()
+    val updateState by app.updates.state.collectAsStateWithLifecycle()
+    val updateAvailable = updateState is nl.kwillems.zeilersforum.data.UpdateState.Available ||
+        updateState is nl.kwillems.zeilersforum.data.UpdateState.ReadyToInstall
+
+    // Eens per dag automatisch op updates controleren (als dat aan staat).
+    LaunchedEffect(Unit) {
+        val s = app.settings.settings.first()
+        if (s.autoCheckUpdates && System.currentTimeMillis() - s.lastUpdateCheck > nl.kwillems.zeilersforum.data.UpdateManager.AUTO_CHECK_INTERVAL) {
+            app.updates.check(quiet = true)
+        }
+    }
     val openTopic: (TopicSummary) -> Unit = { onOpenTopic(it.url, it.title, it.lastPostUrl) }
 
     // ViewModels worden pas aangemaakt (en laden pas) als het tabblad voor het eerst wordt geopend.
@@ -138,12 +150,15 @@ fun HomeScreen(
                     tint = if (loggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Instellingen") }
+            IconButton(onClick = onSettings) {
+                BadgedBox(badge = { if (updateAvailable) Badge() }) { Icon(Icons.Filled.Settings, "Instellingen") }
+            }
         }
         when (Tab.entries[tab]) {
             Tab.RECENT -> TabScaffold("Zeilersforum", actions) { mod ->
                 val recentVm = viewModel(key = "recent") { TopicListViewModel(app, ForumRepository.RECENT_URL) }
                 TopicListContent(recentVm, onOpenTopic = openTopic, modifier = mod, header = {
+                    item(key = "update") { nl.kwillems.zeilersforum.ui.components.UpdateBanner(app, onOpen = onSettings) }
                     item { SectionLabel("Recente discussies") }
                 })
             }

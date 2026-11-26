@@ -20,6 +20,7 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - Inloggen (wachtwoord versleuteld met de Android Keystore), automatisch opnieuw inloggen
 - Reageren en citeren, met foto's als bijlage (worden verkleind tot max. 1920 px)
 - Forumlinks openen in de app
+- Updates: controleert (desgewenst dagelijks) de releases op GitHub, downloadt de nieuwe APK, controleert controlesom en sleutel en start de installatie
 
 ## Bouwen
 Vereist: JDK 21 en de Android SDK (platform `android-37.2`).
@@ -27,6 +28,7 @@ Vereist: JDK 21 en de Android SDK (platform `android-37.2`).
 ```bash
 ./gradlew assembleDebug      # testversie (nl.kwillems.zeilersforum.debug, naast de echte app)
 ./gradlew assembleRelease    # release-versie in app/build/outputs/apk/release/
+./gradlew assembleRelease -PtestVersion=3.0.1   # om het updatemechanisme te testen
 ```
 
 ## Code
