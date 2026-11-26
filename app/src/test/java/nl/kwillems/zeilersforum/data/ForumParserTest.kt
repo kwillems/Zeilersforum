@@ -46,6 +46,17 @@ class ForumParserTest {
         assertTrue(p.forumUrl!!.startsWith("https://zeilersforum.nl/index.php/forum-hoofdmenu-37/82-"))
     }
 
+    @Test fun newCountLabel() {
+        val html = """<table id="kflattable"><tr>
+            <td><a class="ktopic-title km" href="/index.php/forum-hoofdmenu-37/82-x/611296-winterklaar-maken">winterklaar maken<sup class="knewchar">(2 Nieuw)</sup></a></td>
+            </tr><tr><td><a class="ktopic-title km" href="/index.php/forum-hoofdmenu-37/82-x/611297-ander">Ander onderwerp</a></td></tr></table>"""
+        val t = ForumParser.parseTopics(html, "https://zeilersforum.nl/").topics
+        assertEquals("winterklaar maken", t[0].title)
+        assertEquals(2, t[0].newCount)
+        assertEquals("Ander onderwerp", t[1].title)
+        assertEquals(0, t[1].newCount)
+    }
+
     @Test fun readersBlock() {
         // Opbouw zoals op de site als je bent ingelogd: een kop, daarna de namen als profiellinks.
         val html = """<html><body><div id="Kunena">

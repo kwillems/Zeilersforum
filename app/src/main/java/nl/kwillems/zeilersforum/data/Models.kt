@@ -17,6 +17,8 @@ data class TopicSummary(
     /** Link naar de pagina met het laatste bericht (bevat ?start=…). */
     val lastPostUrl: String,
     val hasAttachment: Boolean,
+    /** Aantal nieuwe berichten sinds je laatste bezoek ("(2 Nieuw)" op de site); 0 = geen. */
+    val newCount: Int = 0,
 )
 
 data class TopicsPage(

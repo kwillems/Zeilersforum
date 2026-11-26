@@ -16,16 +16,22 @@ object ForumParser {
 
     // ---------- Recente discussies (en andere onderwerpenlijsten) ----------
 
+    private val NEW_COUNT = Regex("""\(\s*(\d+)\s+nieuw\s*\)""", RegexOption.IGNORE_CASE)
+
     fun parseTopics(html: String, url: String): TopicsPage {
         val doc = Jsoup.parse(html, url)
         val rows = doc.select("table#kflattable tr").filter { it.selectFirst("a.ktopic-title") != null }
         val topics = rows.mapNotNull { row ->
             val titleLink = row.selectFirst("a.ktopic-title") ?: return@mapNotNull null
             val topicUrl = titleLink.absUrl("href")
+            // De site zet "(2 Nieuw)" achter de titel (sup.knewchar); los uitlezen en uit de titel halen.
+            val newCount = NEW_COUNT.find(row.select("sup.knewchar").text())?.groupValues?.get(1)?.toIntOrNull()
+                ?: NEW_COUNT.find(titleLink.text())?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            val title = titleLink.clone().apply { select("sup.knewchar").remove() }.text().replace(NEW_COUNT, "").trim()
             val lastLink = row.selectFirst("span.ktopic-latest-post a[href]")
             TopicSummary(
                 id = topicId(topicUrl),
-                title = titleLink.text(),
+                title = title,
                 url = topicUrl,
                 preview = titleLink.attr("title").trim(),
                 category = row.selectFirst("span.ktopic-category a")?.text().orEmpty(),
@@ -39,6 +45,7 @@ object ForumParser {
                 lastPostAgo = row.selectFirst("span.ktopic-date")?.attr("title").orEmpty(),
                 lastPostUrl = lastLink?.absUrl("href") ?: topicUrl,
                 hasAttachment = row.selectFirst("span.ktopicattach") != null,
+                newCount = newCount,
             )
         }
         val (page, total) = pagination(doc)

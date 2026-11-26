@@ -218,6 +218,12 @@ fun TopicCard(topic: TopicSummary, onClick: () -> Unit, modifier: Modifier = Mod
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (topic.newCount > 0) {
+                    Badge(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                        Text("${topic.newCount} nieuw")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
                 if (topic.hasAttachment) {
                     Icon(Icons.Filled.Attachment, "Bijlage", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
