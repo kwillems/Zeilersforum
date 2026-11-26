@@ -35,7 +35,7 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)
             .build()
-        forum = ForumRepository(client, cookies, CredentialStore(this))
+        forum = ForumRepository(client, cookies, CredentialStore(this), getSharedPreferences("profile", MODE_PRIVATE))
         settings = SettingsRepository(this)
         updates = nl.kwillems.zeilersforum.data.UpdateManager(this, client, settings)
         if (BuildConfig.DEBUG) {

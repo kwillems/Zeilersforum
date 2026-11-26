@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
@@ -112,6 +113,9 @@ fun HomeScreen(
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val loggedIn by app.forum.loggedIn.collectAsStateWithLifecycle()
     val pmUnread by app.forum.pmUnread.collectAsStateWithLifecycle()
+    val avatar by app.forum.avatar.collectAsStateWithLifecycle()
+    val username by app.forum.username.collectAsStateWithLifecycle()
+    LaunchedEffect(loggedIn) { if (loggedIn) app.forum.ensureAvatar() }
     val updateState by app.updates.state.collectAsStateWithLifecycle()
     val updateAvailable = updateState is nl.kwillems.zeilersforum.data.UpdateState.Available ||
         updateState is nl.kwillems.zeilersforum.data.UpdateState.ReadyToInstall
@@ -145,10 +149,24 @@ fun HomeScreen(
     ) {
         val actions: @Composable () -> Unit = {
             IconButton(onClick = onLogin) {
-                Icon(
-                    Icons.Filled.AccountCircle, if (loggedIn) "Account" else "Inloggen",
-                    tint = if (loggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                val av = avatar
+                if (loggedIn && av != null) {
+                    // Eigen avatar, klein en rond; tik = accountscherm.
+                    AsyncImage(
+                        model = av,
+                        contentDescription = "Account" + (username?.let { " ($it)" } ?: ""),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .border(1.5.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape),
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.AccountCircle, if (loggedIn) "Account" else "Inloggen",
+                        tint = if (loggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             IconButton(onClick = onSettings) {
                 BadgedBox(badge = { if (updateAvailable) Badge() }) { Icon(Icons.Filled.Settings, "Instellingen") }

@@ -148,4 +148,17 @@ class ForumParserTest {
         val n = ForumParser.pmUnread(fixture("pm_inbox.html"))
         assertTrue(n != null && n >= 0)
     }
+
+    @Test fun avatarViaSearch() {
+        // Zoekresultaten van één gebruiker (search_user.html); de gebruikersnaam staat in ZF_USER.
+        val user = System.getenv("ZF_USER")
+        assumeTrue("ZF_USER niet gezet", user != null)
+        val url = ForumParser.avatarOf(fixture("search_user.html"), user!!)
+        assertTrue(url != null && url.startsWith("https://zeilersforum.nl/images/comprofiler/"))
+    }
+
+    @Test fun noOwnAvatarAsGuest() {
+        val doc = org.jsoup.Jsoup.parse(fixture("index.html"), ForumParser.BASE)
+        assertEquals(null, ForumParser.myAvatar(doc))
+    }
 }

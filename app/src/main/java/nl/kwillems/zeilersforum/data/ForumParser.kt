@@ -214,6 +214,22 @@ object ForumParser {
         )
     }
 
+    /** Je eigen avatar uit het blok "Welkom, …" bovenaan forumpagina's (alleen als je bent ingelogd). */
+    fun myAvatar(doc: Document): String? =
+        doc.select("#kprofilebox img, table.kprofilebox img, td.kprofileboxcnt img")
+            .map { it.absUrl("src") }
+            .firstOrNull { it.isNotBlank() && !it.contains("/media/kunena/") }
+            ?.let(::fixUrl)
+
+    /** Avatar van [username] bij een zoekresultaat (reserve als het welkomstblok er niet is). */
+    fun avatarOf(html: String, username: String): String? {
+        val doc = Jsoup.parse(html, BASE)
+        return doc.select("a.kwho-user, a[class^=kwho-]").firstOrNull { a ->
+            a.selectFirst("img.kavatar") != null && a.attr("href").substringAfterLast('/').substringAfter('-').equals(username, true)
+                || a.attr("title").contains("$username's", true) && a.selectFirst("img.kavatar") != null
+        }?.selectFirst("img.kavatar")?.absUrl("src")?.let(::fixUrl)
+    }
+
     /** Ingelogd als de pagina geen inlogformulier met wachtwoordveld meer toont. */
     fun isLoggedIn(doc: Document): Boolean =
         doc.selectFirst("input[name=passwd]") == null && doc.selectFirst("body") != null && doc.select("div.kmsg-header, table#kflattable, form").isNotEmpty()

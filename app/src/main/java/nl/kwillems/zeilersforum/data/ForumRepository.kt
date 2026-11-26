@@ -21,6 +21,7 @@ class ForumRepository(
     private val client: OkHttpClient,
     private val cookies: PersistentCookieJar,
     private val credentials: CredentialStore,
+    private val profilePrefs: android.content.SharedPreferences,
 ) {
     private val _loggedIn = MutableStateFlow(false)
     val loggedIn: StateFlow<Boolean> = _loggedIn
@@ -34,10 +35,44 @@ class ForumRepository(
     private val _pmUnread = MutableStateFlow<Int?>(null)
     val pmUnread: StateFlow<Int?> = _pmUnread
 
+    /** Eigen avatar (URL), bewaard zodat hij meteen zichtbaar is bij het openen van de app. */
+    private val _avatar = MutableStateFlow(profilePrefs.getString(KEY_AVATAR, null))
+    val avatar: StateFlow<String?> = _avatar
+
+    private fun setAvatar(url: String?) {
+        if (url == _avatar.value) return
+        _avatar.value = url
+        profilePrefs.edit().apply { if (url == null) remove(KEY_AVATAR) else putString(KEY_AVATAR, url) }.apply()
+    }
+
     private fun track(html: String) {
         val loggedIn = ForumParser.isLoggedIn(html)
         _loggedIn.value = loggedIn
         _pmUnread.value = if (loggedIn) ForumParser.pmUnread(html) ?: _pmUnread.value else null
+        if (loggedIn) ForumParser.myAvatar(org.jsoup.Jsoup.parse(html, BASE))?.let(::setAvatar)
+    }
+
+    /** Zorgt dat de avatar bekend is (bijvoorbeeld na een update van de app). */
+    suspend fun ensureAvatar() {
+        val user = _username.value ?: return
+        if (_avatar.value == null && _loggedIn.value) lookupAvatar(user)
+    }
+
+    /** Reserve: avatar opzoeken via een bericht van jezelf in de zoekfunctie. */
+    private suspend fun lookupAvatar(username: String) {
+        runCatching {
+            val url = SEARCH_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("query", "")
+                .addQueryParameter("searchuser", username)
+                .addQueryParameter("exactname", "1")
+                .addQueryParameter("titleonly", "0")
+                .addQueryParameter("searchdate", "all")
+                .addQueryParameter("sortby", "lastpost")
+                .addQueryParameter("order", "dec")
+                .addQueryParameter("limit", "5")
+                .build().toString()
+            ForumParser.avatarOf(get(url), username)
+        }.getOrNull()?.let(::setAvatar)
     }
 
     /** Alleen in de testversie: bewaart opgehaalde HTML lokaal om de opbouw van de site te bekijken. */
@@ -181,8 +216,11 @@ class ForumRepository(
             throw ForumException(ForumParser.loginError(result) ?: "Inloggen mislukt")
         }
         credentials.save(CredentialStore.Credentials(username.trim(), password))
+        if (_username.value != username.trim()) setAvatar(null)
         _username.value = username.trim()
         _loggedIn.value = true
+        ForumParser.myAvatar(org.jsoup.Jsoup.parse(result, BASE))?.let(::setAvatar)
+        if (_avatar.value == null) lookupAvatar(username.trim())
     }
 
     private suspend fun tryAutoLogin(): Boolean {
@@ -196,6 +234,7 @@ class ForumRepository(
         _username.value = null
         _loggedIn.value = false
         _pmUnread.value = null
+        setAvatar(null)
     }
 
     // ---------- Privéberichten (uddeIM) ----------
@@ -317,6 +356,7 @@ class ForumRepository(
         const val INDEX_URL = "$BASE/index.php/forum-125/index"
         const val SEARCH_URL = "$BASE/index.php/forum-hoofdmenu-37/zoeken"
         const val MY_STARTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-started"
+        private const val KEY_AVATAR = "avatar"
         const val PM_URL = "$BASE/index.php/component/uddeim/"
         const val MY_POSTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-posted"
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android) ZeilersforumApp/3"

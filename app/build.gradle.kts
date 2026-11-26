@@ -94,4 +94,5 @@ dependencies {
 // Parser-tests gebruiken opgeslagen forumpagina's uit de map in ZF_FIXTURES (niet in versiebeheer).
 tasks.withType<Test>().configureEach {
     System.getenv("ZF_FIXTURES")?.let { environment("ZF_FIXTURES", it) }
+    System.getenv("ZF_USER")?.let { environment("ZF_USER", it) }
 }
