@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Zeilersforum" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Zeilersforum.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#3F6FA8</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Zeilersforum</item>
+    </style>
+</resources>

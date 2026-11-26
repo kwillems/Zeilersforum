@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Oude forumberichten bevatten foto's van http-sites (zoals imageshack).
+     Die mogen geladen worden; inloggen en posten gaan altijd via https. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

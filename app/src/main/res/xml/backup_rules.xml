@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Inloggegevens en cookies niet meenemen in back-ups. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="credentials.xml" />
+    <exclude domain="sharedpref" path="cookies.xml" />
+</full-backup-content>
