@@ -13,6 +13,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
 import nl.kwillems.zeilersforum.ZfApp
+import nl.kwillems.zeilersforum.data.PmBox
+import nl.kwillems.zeilersforum.ui.screens.PmComposeScreen
+import nl.kwillems.zeilersforum.ui.screens.PmComposeViewModel
+import nl.kwillems.zeilersforum.ui.screens.PmScreen
+import nl.kwillems.zeilersforum.ui.screens.PmViewModel
 import nl.kwillems.zeilersforum.ui.screens.ImageViewerScreen
 import nl.kwillems.zeilersforum.ui.screens.LoginScreen
 import nl.kwillems.zeilersforum.ui.screens.LoginViewModel
@@ -31,6 +36,8 @@ import nl.kwillems.zeilersforum.ui.screens.TopicListViewModel
 @Serializable data class ReplyRoute(val replyUrl: String, val topicTitle: String, val quote: String? = null, val newTopic: Boolean = false)
 @Serializable data class CategoryRoute(val url: String, val title: String)
 @Serializable object LoginRoute
+@Serializable data class PmRoute(val id: String, val outbox: Boolean, val partner: String)
+@Serializable data class PmComposeRoute(val to: String? = null)
 @Serializable object SettingsRoute
 
 /** Lijst met foto's die de fotoviewer toont (te groot om via de route door te geven). */
@@ -65,6 +72,29 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                 onOpenTopic = { url, title, last -> nav.navigate(TopicRoute(url, title, last)) },
                 onOpenCategory = { c -> nav.navigate(CategoryRoute(c.url, c.name)) },
                 onSettings = { nav.navigate(SettingsRoute) },
+                onLogin = { nav.navigate(LoginRoute) },
+                onOpenMessage = { m, box -> nav.navigate(PmRoute(m.id, box == PmBox.OUTBOX, m.partner)) },
+                onComposeMessage = { nav.navigate(PmComposeRoute()) },
+            )
+        }
+        composable<PmRoute> { entry ->
+            val route = entry.toRoute<PmRoute>()
+            val box = if (route.outbox) PmBox.OUTBOX else PmBox.INBOX
+            val vm = viewModel { PmViewModel(app, route.id, box) }
+            PmScreen(
+                vm = vm,
+                partner = route.partner,
+                onBack = { nav.popBackStack() },
+                onOpenImages = { list, index -> Gallery.images = list; nav.navigate(ImagesRoute(index)) },
+            )
+        }
+        composable<PmComposeRoute> { entry ->
+            val route = entry.toRoute<PmComposeRoute>()
+            val vm = viewModel { PmComposeViewModel(app, route.to) }
+            PmComposeScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onSent = { nav.popBackStack() },
                 onLogin = { nav.navigate(LoginRoute) },
             )
         }

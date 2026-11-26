@@ -278,7 +278,7 @@ object ForumParser {
         }
 
         fun containsBlock(el: Element): Boolean =
-            el.select("img").any { !isSmiley(it) } || el.selectFirst("iframe, div.kmsgtext-quote, blockquote") != null
+            el.select("img").any { !isSmiley(it) } || el.selectFirst("iframe, div.kmsgtext-quote, div.uddeim-replyquote, blockquote") != null
 
         fun walk(node: Node, link: String?) {
             when (node) {
@@ -294,7 +294,7 @@ object ForumParser {
                         flush()
                         out += Block.Video(videoUrl(node.absUrl("src")))
                     }
-                    node.hasClass("kmsgtext-quote") || node.tagName() == "blockquote" -> {
+                    node.hasClass("kmsgtext-quote") || node.hasClass("uddeim-replyquote") || node.tagName() == "blockquote" -> {
                         flush()
                         out += Block.Quote(contentBlocks(node))
                     }
@@ -343,6 +343,104 @@ object ForumParser {
         copy.select("div, p").prepend("\\n")
         return copy.text().replace("\\n", "\n").lines().joinToString("\n") { it.trim() }
             .replace(Regex("\n{3,}"), "\n\n").trim()
+    }
+
+    // ---------- Privéberichten (uddeIM) ----------
+
+    /** Aantal ongelezen privéberichten volgens de zijmodule "Prive Berichten", of null als die er niet is. */
+    fun pmUnread(doc: Document): Int? {
+        val module = doc.selectFirst("#uddeim-modulenew, #uddeim-module") ?: return null
+        val hasNew = module.selectFirst("img[src*=env_ani]") != null
+        return if (!hasNew) 0 else module.select(".uddeim-module-row").size.coerceAtLeast(1)
+    }
+
+    fun pmUnread(html: String): Int? = pmUnread(Jsoup.parse(html, BASE))
+
+    fun parsePmList(html: String, url: String): PmPage {
+        val doc = Jsoup.parse(html, url)
+        if (doc.selectFirst("#uddeim") == null) {
+            if (doc.selectFirst("input[name=passwd]") != null) throw NotLoggedInException()
+            throw ForumException(pageError(html) ?: "Privéberichten niet gevonden")
+        }
+        val rows = doc.select("#uddeim-overview tr").filter { tr ->
+            tr.selectFirst("input[name=\"arcmes[]\"]")?.attr("value")?.matches(Regex("\\d+")) == true
+        }
+        val items = rows.map { tr ->
+            val tds = tr.select("> td")
+            val who = tds.getOrNull(2)?.selectFirst("a")
+            val msg = tds.getOrNull(3)?.selectFirst("a")
+            PmSummary(
+                id = tr.selectFirst("input[name=\"arcmes[]\"]")!!.attr("value"),
+                partner = who?.text() ?: tds.getOrNull(2)?.text().orEmpty(),
+                partnerUrl = who?.absUrl("href")?.let(::fixUrl),
+                partnerOnline = tds.getOrNull(2)?.selectFirst("img[src*=icon_online]") != null,
+                preview = (msg?.text() ?: tds.getOrNull(3)?.text()).orEmpty().trim(),
+                date = tds.getOrNull(4)?.text()?.trim().orEmpty(),
+                unread = tr.selectFirst("img[src*=/new_im]") != null,
+            )
+        }
+        val nav = doc.selectFirst("#uddeim-pagenav")
+        val current = nav?.selectFirst("span.pagenav")?.text()?.toIntOrNull()
+            ?: nav?.select("span.pagenav")?.mapNotNull { it.text().toIntOrNull() }?.firstOrNull() ?: 1
+        val pages = nav?.select(".pagenav")?.mapNotNull { it.text().toIntOrNull() }?.maxOrNull() ?: 1
+        val total = nav?.selectFirst("a[href*=limit=]")?.attr("href")
+            ?.let { Regex("limit=(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: items.size
+        return PmPage(items, current, maxOf(current, pages), total)
+    }
+
+    fun parsePm(html: String, url: String): PmMessage {
+        val doc = Jsoup.parse(html, url)
+        val header = doc.selectFirst("div.uddeim-messageheader")
+            ?: throw if (doc.selectFirst("input[name=passwd]") != null) NotLoggedInException()
+            else ForumException(pageError(html) ?: "Bericht niet gevonden")
+        val fromBox = header.selectFirst("div.uddeim-messagefrom")
+        val who = fromBox?.selectFirst("a")
+        val date = fromBox?.let { box ->
+            box.textNodes().map { it.text().trim() }.lastOrNull { it.isNotBlank() }
+        }.orEmpty()
+        val body = doc.selectFirst("div.uddeim-messagebody")
+        val form = doc.selectFirst("form[name=sendeform]")?.let { f ->
+            val fields = LinkedHashMap<String, String>()
+            f.select("input[type=hidden]").forEach { if (it.attr("name").isNotBlank()) fields[it.attr("name")] = it.attr("value") }
+            PostForm(postUrl = f.absUrl("action"), fields = fields, subject = "")
+        }
+        return PmMessage(
+            id = Regex("messageid=(\\d+)").find(url)?.groupValues?.get(1).orEmpty(),
+            partner = who?.text().orEmpty(),
+            partnerUrl = who?.absUrl("href")?.let(::fixUrl),
+            avatar = header.selectFirst("img.uddeim-tn")?.absUrl("src")?.let(::fixUrl),
+            date = date,
+            blocks = body?.let { contentBlocks(it) }.orEmpty(),
+            replyForm = form,
+            plainText = body?.let { plainText(it) }.orEmpty(),
+        )
+    }
+
+    /** Het formulier voor een nieuw bericht. */
+    fun pmNewForm(html: String, url: String): PostForm {
+        val doc = Jsoup.parse(html, url)
+        val f = doc.selectFirst("form[name=sendeform]")
+            ?: throw if (doc.selectFirst("input[name=passwd]") != null) NotLoggedInException()
+            else ForumException(pageError(html) ?: "Formulier niet gevonden")
+        val fields = LinkedHashMap<String, String>()
+        f.select("input[type=hidden]").forEach { if (it.attr("name").isNotBlank()) fields[it.attr("name")] = it.attr("value") }
+        return PostForm(postUrl = f.absUrl("action"), fields = fields, subject = "")
+    }
+
+    /**
+     * Na verzenden: geslaagd als het schrijfformulier niet opnieuw met onze tekst wordt getoond.
+     * Geeft een foutmelding terug, of null als het gelukt is.
+     */
+    fun pmSendError(html: String, sentText: String): String? {
+        val doc = Jsoup.parse(html, BASE)
+        val area = doc.selectFirst("form[name=sendeform] textarea[name=pmessage]")
+        if (area != null && area.text().trim().isNotEmpty() && sentText.trim().startsWith(area.text().trim().take(20))) {
+            val msg = doc.select("#uddeim-m .uddeim-error, #uddeim-m div[style*=color], #uddeim-m b, #uddeim-m strong")
+                .map { it.text().trim() }.firstOrNull { it.length > 5 }
+            return msg ?: "Bericht niet verzonden"
+        }
+        if (doc.selectFirst("input[name=passwd]") != null && doc.selectFirst("#uddeim") == null) return "Je bent niet (meer) ingelogd"
+        return null
     }
 
     // ---------- Formulieren ----------

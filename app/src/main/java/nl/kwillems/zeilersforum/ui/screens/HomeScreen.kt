@@ -74,6 +74,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import nl.kwillems.zeilersforum.ZfApp
 import nl.kwillems.zeilersforum.data.Category
+import nl.kwillems.zeilersforum.data.PmBox
+import nl.kwillems.zeilersforum.data.PmSummary
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.outlined.Mail
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExtendedFloatingActionButton
 import nl.kwillems.zeilersforum.data.ForumRepository
 import nl.kwillems.zeilersforum.data.SearchResult
 import nl.kwillems.zeilersforum.data.Section
@@ -86,6 +94,7 @@ private enum class Tab(val label: String, val icon: ImageVector, val selectedIco
     FORUM("Forum", Icons.Outlined.Forum, Icons.Filled.Forum),
     SEARCH("Zoeken", Icons.Filled.Search, Icons.Filled.Search),
     MINE("Mijn", Icons.Outlined.Person, Icons.Filled.Person),
+    MESSAGES("Berichten", Icons.Outlined.Mail, Icons.Filled.Mail),
 }
 
 /** Startscherm met tabbladen; op een tablet wordt de onderbalk automatisch een zijbalk. */
@@ -96,9 +105,12 @@ fun HomeScreen(
     onOpenCategory: (Category) -> Unit,
     onSettings: () -> Unit,
     onLogin: () -> Unit,
+    onOpenMessage: (PmSummary, PmBox) -> Unit,
+    onComposeMessage: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val loggedIn by app.forum.loggedIn.collectAsStateWithLifecycle()
+    val pmUnread by app.forum.pmUnread.collectAsStateWithLifecycle()
     val openTopic: (TopicSummary) -> Unit = { onOpenTopic(it.url, it.title, it.lastPostUrl) }
 
     // ViewModels worden pas aangemaakt (en laden pas) als het tabblad voor het eerst wordt geopend.
@@ -108,7 +120,12 @@ fun HomeScreen(
                 item(
                     selected = tab == i,
                     onClick = { tab = i },
-                    icon = { Icon(if (tab == i) t.selectedIcon else t.icon, null) },
+                    icon = {
+                        val unread = if (t == Tab.MESSAGES) pmUnread ?: 0 else 0
+                        BadgedBox(badge = { if (unread > 0) Badge { Text(unread.toString()) } }) {
+                            Icon(if (tab == i) t.selectedIcon else t.icon, null)
+                        }
+                    },
                     label = { Text(t.label) },
                 )
             }
@@ -138,6 +155,19 @@ fun HomeScreen(
                 val searchVm = viewModel(key = "search") { SearchViewModel(app) }
                 SearchContent(searchVm, onOpen = { r -> onOpenTopic(r.url, r.title, null) }, modifier = mod)
             }
+            Tab.MESSAGES -> TabScaffold(
+                "Privéberichten", actions,
+                fab = {
+                    if (loggedIn) ExtendedFloatingActionButton(
+                        onClick = onComposeMessage,
+                        icon = { Icon(Icons.Filled.Edit, null) },
+                        text = { Text("Nieuw bericht") },
+                    )
+                },
+            ) { mod ->
+                val pmVm = viewModel(key = "pm") { PmListViewModel(app) }
+                PmListContent(pmVm, loggedIn, onOpen = onOpenMessage, onLogin = onLogin, modifier = mod)
+            }
             Tab.MINE -> TabScaffold("Mijn onderwerpen", actions) { mod ->
                 MyTopicsContent(app, loggedIn, openTopic, onLogin, mod)
             }
@@ -147,9 +177,15 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TabScaffold(title: String, actions: @Composable () -> Unit, content: @Composable (Modifier) -> Unit) {
+private fun TabScaffold(
+    title: String,
+    actions: @Composable () -> Unit,
+    fab: @Composable () -> Unit = {},
+    content: @Composable (Modifier) -> Unit,
+) {
     val scroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        floatingActionButton = fab,
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = {
             TopAppBar(

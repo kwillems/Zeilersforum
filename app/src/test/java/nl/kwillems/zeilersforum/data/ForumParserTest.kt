@@ -104,4 +104,48 @@ class ForumParserTest {
         assertEquals("https://zeilersforum.nl/index.php/cb-login", action)
         assertTrue("cbsecuritym3" in fields && fields["option"] == "com_comprofiler")
     }
+
+    // ---------- Privéberichten (geanonimiseerde pagina's: lange teksten zijn "[tekst]") ----------
+
+    @Test fun pmInbox() {
+        val p = ForumParser.parsePmList(fixture("pm_inbox.html"), "https://zeilersforum.nl/index.php?option=com_uddeim&task=inbox")
+        assertEquals(20, p.items.size)
+        assertTrue(p.totalPages > 1)
+        assertTrue(p.total > 20)
+        assertTrue(p.items.all { it.id.matches(Regex("\\d+")) && it.partner.isNotBlank() && it.date.isNotBlank() })
+        assertTrue(p.items.all { it.partnerUrl?.startsWith("https://zeilersforum.nl/") == true })
+    }
+
+    @Test fun pmOutbox() {
+        val p = ForumParser.parsePmList(fixture("pm_outbox.html"), "https://zeilersforum.nl/index.php?option=com_uddeim&task=outbox")
+        assertTrue(p.items.isNotEmpty())
+        assertTrue(p.items.any { it.unread }) // ontvanger heeft het nog niet gelezen
+    }
+
+    @Test fun pmShow() {
+        val html = fixture("pm_show.html")
+        // Het berichtnummer komt uit de (lokale) testpagina, zodat er geen echt nummer in de code staat.
+        val id = Regex("name=\"messageid\" value=\"(\\d+)\"").find(html)!!.groupValues[1]
+        val m = ForumParser.parsePm(html, "https://zeilersforum.nl/index.php?option=com_uddeim&task=show&messageid=$id")
+        assertEquals(id, m.id)
+        assertTrue(m.partner.isNotBlank())
+        assertTrue(m.date.contains("2026"))
+        assertTrue(m.blocks.isNotEmpty())
+        assertTrue(m.blocks.any { it is Block.Quote })
+        val f = m.replyForm!!
+        assertTrue(f.postUrl.contains("task=save"))
+        assertEquals(id, f.fields["messageid"])
+        assertTrue(f.fields["to_id"]!!.isNotBlank())
+    }
+
+    @Test fun pmNewForm() {
+        val f = ForumParser.pmNewForm(fixture("pm_new.html"), "https://zeilersforum.nl/index.php?option=com_uddeim&task=new")
+        assertTrue(f.postUrl.contains("task=save"))
+        assertTrue("to_id" in f.fields && "messageid" in f.fields)
+    }
+
+    @Test fun pmUnreadModule() {
+        val n = ForumParser.pmUnread(fixture("pm_inbox.html"))
+        assertTrue(n != null && n >= 0)
+    }
 }

@@ -123,6 +123,37 @@ data class TopicPage(
 
 typealias ReplyForm = PostForm
 
+// ---------- Privéberichten (uddeIM) ----------
+
+enum class PmBox { INBOX, OUTBOX }
+
+/** Eén regel in postvak in of verzonden. */
+data class PmSummary(
+    val id: String,
+    /** Afzender (postvak in) of ontvanger (verzonden). */
+    val partner: String,
+    val partnerUrl: String?,
+    val partnerOnline: Boolean,
+    val preview: String,
+    val date: String,
+    /** Postvak in: ik heb het nog niet gelezen. Verzonden: de ontvanger heeft het nog niet gelezen. */
+    val unread: Boolean,
+)
+
+data class PmPage(val items: List<PmSummary>, val page: Int, val totalPages: Int, val total: Int)
+
+data class PmMessage(
+    val id: String,
+    val partner: String,
+    val partnerUrl: String?,
+    val avatar: String?,
+    val date: String,
+    val blocks: List<Block>,
+    /** Antwoordformulier onder het bericht (alleen bij ontvangen berichten). */
+    val replyForm: PostForm?,
+    val plainText: String,
+)
+
 enum class PostOrder { OLDEST_FIRST, NEWEST_FIRST }
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }

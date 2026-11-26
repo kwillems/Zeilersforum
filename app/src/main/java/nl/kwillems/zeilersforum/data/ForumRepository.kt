@@ -30,8 +30,54 @@ class ForumRepository(
 
     private val loginMutex = Mutex()
 
+    /** Aantal ongelezen privéberichten (uit de zijmodule op elke pagina), null = onbekend/niet ingelogd. */
+    private val _pmUnread = MutableStateFlow<Int?>(null)
+    val pmUnread: StateFlow<Int?> = _pmUnread
+
+    private fun track(html: String) {
+        val loggedIn = ForumParser.isLoggedIn(html)
+        _loggedIn.value = loggedIn
+        _pmUnread.value = if (loggedIn) ForumParser.pmUnread(html) ?: _pmUnread.value else null
+    }
+
     /** Alleen in de testversie: bewaart opgehaalde HTML lokaal om de opbouw van de site te bekijken. */
     var debugDump: ((name: String, html: String) -> Unit)? = null
+
+    /**
+     * Alleen testversie: haalt pagina's op en bewaart ze lokaal met weggepoetste lange teksten,
+     * zodat de opbouw te bekijken is zonder de inhoud van berichten.
+     */
+    suspend fun debugSavePages(pages: Map<String, String>): Int {
+        var n = 0
+        for ((name, url) in pages) {
+            val html = runCatching { get(url) }.getOrNull() ?: continue
+            debugDump?.invoke(name, withContext(Dispatchers.Default) { redact(html, url) })
+            n++
+        }
+        return n
+    }
+
+    suspend fun debugFirstReadMessageId(inboxUrl: String): String? {
+        val doc = org.jsoup.Jsoup.parse(get(inboxUrl), inboxUrl)
+        return doc.select("#uddeim-overview tr").firstOrNull { it.selectFirst("img[src*=nonew_im]") != null }
+            ?.selectFirst("input[name=arcmes[]]")?.attr("value")?.takeIf { it.isNotBlank() }
+    }
+
+    private fun redact(html: String, url: String): String {
+        val doc = org.jsoup.Jsoup.parse(html, url)
+        doc.select("script, style").remove()
+        doc.traverse { node, _ ->
+            if (node is org.jsoup.nodes.TextNode && node.text().trim().length > 30) node.text("[tekst]")
+            if (node is org.jsoup.nodes.Element) {
+                for (attr in listOf("title", "alt", "value", "content")) {
+                    val v = node.attr(attr)
+                    if (v.length > 30 && !(node.tagName() == "input" && node.attr("type") == "hidden")) node.attr(attr, "[tekst]")
+                }
+            }
+        }
+        doc.select("textarea").forEach { it.text("") }
+        return doc.outerHtml()
+    }
 
     // ---------- HTTP ----------
 
@@ -71,13 +117,13 @@ class ForumRepository(
             if (!tryAutoLogin()) throw NotLoggedInException()
             html = get(url)
         }
-        _loggedIn.value = ForumParser.isLoggedIn(html)
+        track(html)
         return withContext(Dispatchers.Default) { ForumParser.parseTopics(html, url) }
     }
 
     suspend fun forumIndex(): List<Section> {
         val html = get(INDEX_URL)
-        _loggedIn.value = ForumParser.isLoggedIn(html)
+        track(html)
         return withContext(Dispatchers.Default) { ForumParser.parseIndex(html, INDEX_URL) }
     }
 
@@ -107,7 +153,7 @@ class ForumRepository(
             html = get(url)
             page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
         }
-        _loggedIn.value = page.loggedIn
+        track(html)
         debugDump?.invoke(if (page.loggedIn) "topic_ingelogd" else "topic_gast", html)
         return page
     }
@@ -149,6 +195,60 @@ class ForumRepository(
         credentials.clear()
         _username.value = null
         _loggedIn.value = false
+        _pmUnread.value = null
+    }
+
+    // ---------- Privéberichten (uddeIM) ----------
+
+    /** Haalt een pagina op waarvoor je ingelogd moet zijn; logt zo nodig eerst automatisch in. */
+    private suspend fun getLoggedIn(url: String): String {
+        var html = get(url)
+        if (!ForumParser.isLoggedIn(html)) {
+            if (!tryAutoLogin()) throw NotLoggedInException()
+            html = get(url)
+        }
+        track(html)
+        return html
+    }
+
+    suspend fun pmList(box: PmBox, page: Int): PmPage {
+        val task = if (box == PmBox.INBOX) "inbox" else "outbox"
+        val url = "$PM_URL?task=$task" + if (page > 1) "&limit=20&start=${(page - 1) * 20}" else ""
+        val html = getLoggedIn(url)
+        return withContext(Dispatchers.Default) { ForumParser.parsePmList(html, url) }
+    }
+
+    suspend fun pmMessage(id: String, box: PmBox): PmMessage {
+        val url = "$PM_URL?task=${if (box == PmBox.INBOX) "show" else "showout"}&messageid=$id"
+        val html = getLoggedIn(url)
+        return withContext(Dispatchers.Default) { ForumParser.parsePm(html, url) }
+    }
+
+    suspend fun pmNewForm(): PostForm {
+        val url = "$PM_URL?task=new"
+        val html = getLoggedIn(url)
+        return withContext(Dispatchers.Default) { ForumParser.pmNewForm(html, url) }
+    }
+
+    /** Verstuurt een privébericht. [toName] alleen bij een nieuw bericht (bij beantwoorden staat de ontvanger in het formulier). */
+    suspend fun pmSend(form: PostForm, text: String, toName: String?, copyToMe: Boolean) {
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+            form.fields.forEach { (k, v) -> if (k != "to_name" || toName == null) addFormDataPart(k, v) }
+            if (toName != null) addFormDataPart("to_name", toName.trim())
+            addFormDataPart("pmessage", text)
+            if (copyToMe) addFormDataPart("copytome", "1")
+            addFormDataPart("addccinfo", "1")
+            addFormDataPart("reply", "Verstuur")
+        }.build()
+        val (html, _) = postWithUrl(form.postUrl, body)
+        ForumParser.pmSendError(html, text)?.let { throw ForumException(it) }
+        track(html)
+    }
+
+    suspend fun pmDelete(id: String, box: PmBox) {
+        val url = if (box == PmBox.INBOX) "$PM_URL?task=delete&messageid=$id&ret=top"
+        else "$PM_URL?task=deletefromoutbox&messageid=$id&limit=20&start=0"
+        getLoggedIn(url)
     }
 
     fun hasCredentials() = credentials.load() != null
@@ -217,6 +317,7 @@ class ForumRepository(
         const val INDEX_URL = "$BASE/index.php/forum-125/index"
         const val SEARCH_URL = "$BASE/index.php/forum-hoofdmenu-37/zoeken"
         const val MY_STARTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-started"
+        const val PM_URL = "$BASE/index.php/component/uddeim/"
         const val MY_POSTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-posted"
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android) ZeilersforumApp/3"
     }

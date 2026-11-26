@@ -55,6 +55,7 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     val user by app.forum.username.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var editSignature by remember { mutableStateOf(false) }
+    var debugResult by remember { mutableStateOf<String?>(null) }
 
     if (editSignature) {
         var text by remember { mutableStateOf(s.signatureText) }
@@ -142,6 +143,30 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
+            if (BuildConfig.DEBUG) {
+                ListItem(
+                    headlineContent = { Text("Test: privéberichtpagina's bewaren") },
+                    supportingContent = { Text(debugResult ?: "Bewaart de opbouw van postvak in, verzonden en nieuw bericht (lange teksten weggepoetst)") },
+                    modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = {
+                        scope.launch {
+                            val base = "https://zeilersforum.nl/index.php?option=com_uddeim"
+                            // Een al gelezen bericht (nonew_im) gebruiken, zodat niets ongemerkt als gelezen wordt gemarkeerd.
+                            val readId = app.forum.debugFirstReadMessageId("$base&task=inbox")
+                            val pages = mutableMapOf(
+                                "pm_inbox" to "$base&task=inbox",
+                                "pm_outbox" to "$base&task=outbox",
+                                "pm_new" to "$base&task=new",
+                            )
+                            if (readId != null) {
+                                pages["pm_show"] = "$base&task=show&messageid=$readId"
+                                pages["pm_reply"] = "$base&task=reply&messageid=$readId"
+                            }
+                            val n = app.forum.debugSavePages(pages)
+                            debugResult = "$n pagina's bewaard"
+                        }
+                    }),
+                )
+            }
             Section("Account")
             ListItem(
                 headlineContent = { Text(user ?: "Niet ingelogd") },
