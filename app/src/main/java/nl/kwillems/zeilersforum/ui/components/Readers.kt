@@ -1,32 +1,33 @@
 package nl.kwillems.zeilersforum.ui.components
 
-import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import nl.kwillems.zeilersforum.data.MemberRole
 import nl.kwillems.zeilersforum.data.OnlineMember
 
@@ -40,39 +41,41 @@ private fun roleColor(role: MemberRole): Color = when (role) {
     MemberRole.USER -> MaterialTheme.colorScheme.primary
 }
 
-/** "Wie leest er mee?": de leden die dit onderwerp nu bekijken. Tik op een naam voor het profiel. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * "Wie leest er mee?" als compacte regel: oogje + namen als links (tik = profiel).
+ * Lange lijsten tonen eerst twee regels; tik op de regel om alles te zien.
+ */
 @Composable
 fun ReadersCard(readers: List<OnlineMember>, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    OutlinedCard(modifier) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Visibility, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Text(
-                    "Wie leest er mee?",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(start = 8.dp).weight(1f),
-                )
-                Text(
-                    readers.size.toString(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-                readers.forEach { m ->
-                    val color = roleColor(m.role)
-                    AssistChip(
-                        onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, m.profileUrl.toUri())) },
-                        label = { Text(m.name) },
-                        leadingIcon = { Box(Modifier.size(8.dp).clip(CircleShape).background(color)) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            labelColor = if (m.role == MemberRole.USER) MaterialTheme.colorScheme.onSurface else color,
-                        ),
-                    )
-                }
-            }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var overflowing by rememberSaveable { mutableStateOf(false) }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val colors = readers.map { roleColor(it.role) }
+    val text = buildAnnotatedString {
+        withStyle(SpanStyle(color = muted, fontWeight = FontWeight.Medium)) { append("Leest mee: ") }
+        readers.forEachIndexed { i, m ->
+            if (i > 0) withStyle(SpanStyle(color = muted)) { append(", ") }
+            withLink(LinkAnnotation.Url(m.profileUrl, TextLinkStyles(SpanStyle(color = colors[i])))) { append(m.name) }
         }
+    }
+    Row(
+        modifier
+            .animateContentSize()
+            .clickable(enabled = overflowing || expanded) { expanded = !expanded }
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            Icons.Outlined.Visibility, contentDescription = "Wie leest er mee?",
+            tint = muted, modifier = Modifier.padding(top = 2.dp).size(16.dp),
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = if (expanded) Int.MAX_VALUE else 2,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { r: TextLayoutResult -> if (!expanded) overflowing = r.hasVisualOverflow },
+            modifier = Modifier.padding(start = 6.dp),
+        )
     }
 }
