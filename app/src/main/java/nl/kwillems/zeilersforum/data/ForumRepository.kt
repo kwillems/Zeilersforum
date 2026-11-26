@@ -144,9 +144,12 @@ class ForumRepository(
 
     suspend fun recentTopics(page: Int): TopicsPage = topicList(RECENT_URL, page, 40)
 
+    /** Adres van "Recente discussies" voor een periode (sel = waarde uit de keuzelijst van de site). */
+    fun recentUrl(sel: Int): String = if (sel == 0) RECENT_URL else "$RECENT_URL?sel=$sel"
+
     /** Een lijst met onderwerpen: recent, een categorie of "mijn onderwerpen". */
     suspend fun topicList(baseUrl: String, page: Int, perPage: Int, needsLogin: Boolean = false): TopicsPage {
-        val url = if (page <= 1) baseUrl else "$baseUrl?start=${(page - 1) * perPage}"
+        val url = if (page <= 1) baseUrl else baseUrl + (if ('?' in baseUrl) "&" else "?") + "start=${(page - 1) * perPage}"
         var html = get(url)
         if (needsLogin && !ForumParser.isLoggedIn(html)) {
             if (!tryAutoLogin()) throw NotLoggedInException()

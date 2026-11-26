@@ -20,7 +20,23 @@ data class Settings(
     /** Eens per dag bij het openen kijken of er een nieuwe versie op GitHub staat. */
     val autoCheckUpdates: Boolean = true,
     val lastUpdateCheck: Long = 0,
+    /** Hoe ver "Recente discussies" teruggaat (keuzelijst van de site). */
+    val recentPeriod: RecentPeriod = RecentPeriod.SINCE_LAST_VISIT,
 )
+
+/** De periodes uit de keuzelijst op de site; [sel] is de waarde die de site verwacht. */
+enum class RecentPeriod(val sel: Int, val label: String) {
+    SINCE_LAST_VISIT(0, "Sinds laatste bezoek"),
+    HOURS_4(4, "4 uur"),
+    HOURS_8(8, "8 uur"),
+    HOURS_12(12, "12 uur"),
+    HOURS_24(24, "24 uur"),
+    HOURS_48(48, "48 uur"),
+    WEEK(168, "Week"),
+    MONTH(720, "Maand"),
+    YEAR(8760, "Jaar"),
+    ALL(-1, "Alle"),
+}
 
 /** Wanneer foto's in berichten automatisch worden geladen. */
 enum class ImageMode { ALWAYS, WIFI_ONLY, ON_TAP }
@@ -41,6 +57,7 @@ class SettingsRepository(private val context: Context) {
                 ?: if (p[IMAGES] == false) ImageMode.ON_TAP else ImageMode.ALWAYS,
             autoCheckUpdates = p[AUTO_UPDATE] ?: true,
             lastUpdateCheck = p[LAST_UPDATE_CHECK] ?: 0,
+            recentPeriod = p[RECENT_PERIOD]?.let { runCatching { RecentPeriod.valueOf(it) }.getOrNull() } ?: RecentPeriod.SINCE_LAST_VISIT,
         )
     }
 
@@ -50,6 +67,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppSignature(v: Boolean) = context.dataStore.edit { it[SIGNATURE] = v }
     suspend fun setAutoCheckUpdates(v: Boolean) = context.dataStore.edit { it[AUTO_UPDATE] = v }
     suspend fun setLastUpdateCheck(v: Long) = context.dataStore.edit { it[LAST_UPDATE_CHECK] = v }
+    suspend fun setRecentPeriod(v: RecentPeriod) = context.dataStore.edit { it[RECENT_PERIOD] = v.name }
     suspend fun setImageMode(v: ImageMode) = context.dataStore.edit { it[IMAGE_MODE] = v.name; it.remove(IMAGES) }
 
     /** Lege tekst = terug naar de standaardondertekening. */
@@ -67,5 +85,6 @@ class SettingsRepository(private val context: Context) {
         val AUTO_UPDATE = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK = androidx.datastore.preferences.core.longPreferencesKey("last_update_check")
         val SIGNATURE_TEXT = stringPreferencesKey("signature_text")
+        val RECENT_PERIOD = stringPreferencesKey("recent_period")
     }
 }

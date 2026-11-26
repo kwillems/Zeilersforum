@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
 import nl.kwillems.zeilersforum.BuildConfig
 import nl.kwillems.zeilersforum.ZfApp
 import nl.kwillems.zeilersforum.data.PostOrder
+import nl.kwillems.zeilersforum.data.RecentPeriod
 import nl.kwillems.zeilersforum.data.Settings
 import nl.kwillems.zeilersforum.data.ThemeMode
 
@@ -58,6 +59,28 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     val scope = rememberCoroutineScope()
     var editSignature by remember { mutableStateOf(false) }
     var debugResult by remember { mutableStateOf<String?>(null) }
+    var choosePeriod by remember { mutableStateOf(false) }
+
+    if (choosePeriod) AlertDialog(
+        onDismissRequest = { choosePeriod = false },
+        title = { Text("Recente discussies van") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                RecentPeriod.entries.forEach { p ->
+                    ListItem(
+                        headlineContent = { Text(p.label) },
+                        leadingContent = { RadioButton(selected = s.recentPeriod == p, onClick = null) },
+                        colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                        modifier = Modifier.selectable(selected = s.recentPeriod == p, role = Role.RadioButton, onClick = {
+                            scope.launch { app.settings.setRecentPeriod(p) }
+                            choosePeriod = false
+                        }),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { choosePeriod = false }) { Text("Sluiten") } },
+    )
 
     if (editSignature) {
         var text by remember { mutableStateOf(s.signatureText) }
@@ -101,6 +124,22 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
         )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+            Section("Recente discussies")
+            ListItem(
+                headlineContent = { Text("Periode") },
+                supportingContent = {
+                    Text(
+                        when (s.recentPeriod) {
+                            RecentPeriod.SINCE_LAST_VISIT -> "Sinds je laatste bezoek (standaard op de site)"
+                            RecentPeriod.ALL -> "Alle discussies, ook heel oude"
+                            else -> "Discussies van de afgelopen ${s.recentPeriod.label.lowercase()}"
+                        },
+                    )
+                },
+                modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = { choosePeriod = true }),
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
             Section("Berichten")
             Choice("Oud → nieuw", "Begin bij het eerste bericht van een onderwerp", s.postOrder == PostOrder.OLDEST_FIRST) {
                 scope.launch { app.settings.setPostOrder(PostOrder.OLDEST_FIRST) }

@@ -7,7 +7,7 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - Pakketnaam `nl.kwillems.zeilersforum`
 
 ## Functies
-- Tabbladen **Recent** (Recente discussies), **Forum** (categorieën en subcategorieën), **Zoeken** (hele forum) en **Mijn** (meegedaan / zelf gestart)
+- Tabbladen **Recent** (Recente discussies, periode instelbaar: sinds laatste bezoek, uren, week, maand, jaar of alles), **Forum** (categorieën en subcategorieën), **Zoeken** (hele forum) en **Mijn** (meegedaan / zelf gestart)
 - Nieuw onderwerp starten vanuit een categorie
 - Onderwerpen lezen met foto's, citaten, smileys (als emoji), video-links en bijlagen
 - Volgorde van berichten instelbaar: **oud → nieuw** of **nieuw → oud** (knop ⇅ in een onderwerp, of via Instellingen)

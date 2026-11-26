@@ -85,6 +85,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExtendedFloatingActionButton
 import nl.kwillems.zeilersforum.data.ForumRepository
+import nl.kwillems.zeilersforum.data.RecentPeriod
 import nl.kwillems.zeilersforum.data.SearchResult
 import nl.kwillems.zeilersforum.data.Section
 import nl.kwillems.zeilersforum.data.TopicSummary
@@ -174,11 +175,24 @@ fun HomeScreen(
         }
         when (Tab.entries[tab]) {
             Tab.RECENT -> TabScaffold("Zeilersforum", actions) { mod ->
-                val recentVm = viewModel(key = "recent") { TopicListViewModel(app, ForumRepository.RECENT_URL) }
-                TopicListContent(recentVm, onOpenTopic = openTopic, modifier = mod, header = {
-                    item(key = "update") { nl.kwillems.zeilersforum.ui.components.UpdateBanner(app, onOpen = onSettings) }
-                    item { SectionLabel("Recente discussies") }
-                })
+                // Pas laden als de instellingen bekend zijn, zodat de lijst meteen met de goede periode komt.
+                val period = app.settings.settings.collectAsStateWithLifecycle(initialValue = null).value?.recentPeriod
+                if (period == null) {
+                    Box(mod.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                } else {
+                    val url = app.forum.recentUrl(period.sel)
+                    val recentVm = viewModel(key = "recent") { TopicListViewModel(app, url) }
+                    LaunchedEffect(url) { recentVm.switchTo(url) }
+                    TopicListContent(recentVm, onOpenTopic = openTopic, modifier = mod, header = {
+                        item(key = "update") { nl.kwillems.zeilersforum.ui.components.UpdateBanner(app, onOpen = onSettings) }
+                        item {
+                            SectionLabel(
+                                if (period == RecentPeriod.SINCE_LAST_VISIT) "Recente discussies"
+                                else "Recente discussies · ${period.label.lowercase()}",
+                            )
+                        }
+                    })
+                }
             }
             Tab.FORUM -> TabScaffold("Forum", actions) { mod ->
                 val indexVm = viewModel(key = "index") { ForumIndexViewModel(app) }
