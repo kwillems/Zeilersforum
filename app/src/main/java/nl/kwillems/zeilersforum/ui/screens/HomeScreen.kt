@@ -127,7 +127,7 @@ fun HomeScreen(
             Tab.RECENT -> TabScaffold("Zeilersforum", actions) { mod ->
                 val recentVm = viewModel(key = "recent") { TopicListViewModel(app, ForumRepository.RECENT_URL) }
                 TopicListContent(recentVm, onOpenTopic = openTopic, modifier = mod, header = {
-                    item { SectionLabel("Recente onderwerpen") }
+                    item { SectionLabel("Recente discussies") }
                 })
             }
             Tab.FORUM -> TabScaffold("Forum", actions) { mod ->

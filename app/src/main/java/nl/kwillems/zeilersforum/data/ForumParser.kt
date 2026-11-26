@@ -14,7 +14,7 @@ object ForumParser {
 
     const val BASE = "https://zeilersforum.nl"
 
-    // ---------- Recente onderwerpen ----------
+    // ---------- Recente discussies (en andere onderwerpenlijsten) ----------
 
     fun parseTopics(html: String, url: String): TopicsPage {
         val doc = Jsoup.parse(html, url)
