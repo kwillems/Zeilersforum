@@ -22,8 +22,8 @@ android {
         applicationId = "nl.kwillems.zeilersforum"
         minSdk = 26
         targetSdk = 37
-        versionCode = 304
-        versionName = "3.0.4"
+        versionCode = 305
+        versionName = "3.0.5"
         // Alleen om het updatemechanisme te testen: ./gradlew assembleRelease -PtestVersion=3.0.1
         (project.findProperty("testVersion") as String?)?.let { versionName = it; versionCode = 1 }
     }
