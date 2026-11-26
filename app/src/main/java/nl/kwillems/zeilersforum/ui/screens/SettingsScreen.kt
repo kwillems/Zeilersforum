@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.alpha
 import nl.kwillems.zeilersforum.data.DEFAULT_SIGNATURE
+import nl.kwillems.zeilersforum.data.ImageMode
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -104,9 +105,21 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             Choice("Nieuw → oud", "Begin bij het nieuwste bericht", s.postOrder == PostOrder.NEWEST_FIRST) {
                 scope.launch { app.settings.setPostOrder(PostOrder.NEWEST_FIRST) }
             }
-            Toggle("Foto's automatisch laden", "Uitzetten bespaart mobiele data", s.loadImages) {
-                scope.launch { app.settings.setLoadImages(it) }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("Foto's in berichten")
+            Choice("Altijd laden", "Foto's verschijnen meteen in het bericht", s.imageMode == ImageMode.ALWAYS) {
+                scope.launch { app.settings.setImageMode(ImageMode.ALWAYS) }
             }
+            Choice("Alleen via wifi", "Op mobiele data verschijnt een knop \"Foto bekijken\"", s.imageMode == ImageMode.WIFI_ONLY) {
+                scope.launch { app.settings.setImageMode(ImageMode.WIFI_ONLY) }
+            }
+            Choice("Knop \"Foto bekijken\"", "Foto's pas laden als je erop tikt; bespaart data", s.imageMode == ImageMode.ON_TAP) {
+                scope.launch { app.settings.setImageMode(ImageMode.ON_TAP) }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("Reageren")
             Toggle("Ondertekening toevoegen", "Een regel onder elke reactie die je met de app plaatst", s.appSignature) {
                 scope.launch { app.settings.setAppSignature(it) }
             }

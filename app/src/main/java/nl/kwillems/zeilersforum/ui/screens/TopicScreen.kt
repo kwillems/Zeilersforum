@@ -82,6 +82,9 @@ import nl.kwillems.zeilersforum.data.PostOrder
 import nl.kwillems.zeilersforum.data.Settings
 import nl.kwillems.zeilersforum.ui.components.ErrorPane
 import nl.kwillems.zeilersforum.ui.components.PostContent
+import nl.kwillems.zeilersforum.ui.components.ShowPhotoButton
+import nl.kwillems.zeilersforum.ui.components.autoLoadImages
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,6 +101,7 @@ fun TopicScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle(initialValue = Settings())
     val refresh by refreshRequest.collectAsStateWithLifecycle()
+    val autoLoad = autoLoadImages(settings.imageMode)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -215,7 +219,7 @@ fun TopicScreen(
                     items(state.posts, key = { it.id.ifBlank { it.hashCode().toString() } }) { post ->
                         PostCard(
                             post = post,
-                            loadImages = settings.loadImages,
+                            loadImages = autoLoad,
                             canQuote = state.loggedIn && state.replyUrl != null,
                             onQuote = {
                                 val quote = "[quote=\"${post.author}\" post=${post.id}]${post.plainText}[/quote]\n"
@@ -337,8 +341,18 @@ private fun PostCard(
                     "Bijlagen", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
                 )
+                val imageAttachments = extra.count { it.isImage }
+                var showAttachments by rememberSaveable(post.id) { mutableStateOf(false) }
+                if (!loadImages && !showAttachments && imageAttachments > 0) {
+                    ShowPhotoButton(
+                        src = extra.first { it.isImage }.url,
+                        onClick = { showAttachments = true },
+                        label = if (imageAttachments == 1) "Bijlage bekijken" else "$imageAttachments bijlagen bekijken",
+                    )
+                    Spacer(Modifier.size(8.dp))
+                }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(extra) { a ->
+                    items(extra.filter { !it.isImage || loadImages || showAttachments }) { a ->
                         if (a.isImage) {
                             AsyncImage(
                                 model = a.url, contentDescription = a.name, contentScale = ContentScale.Crop,

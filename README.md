@@ -13,6 +13,8 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - Volgorde van berichten instelbaar: **oud → nieuw** of **nieuw → oud** (knop ⇅ in een onderwerp, of via Instellingen)
 - Naar een bepaalde pagina springen
 - Fotoviewer met zoomen en vegen
+- Foto's in berichten: altijd laden, alleen via wifi, of pas na een tik op "Foto bekijken"
+- Instelbare ondertekening onder reacties
 - Inloggen (wachtwoord versleuteld met de Android Keystore), automatisch opnieuw inloggen
 - Reageren en citeren, met foto's als bijlage (worden verkleind tot max. 1920 px)
 - Forumlinks openen in de app

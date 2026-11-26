@@ -29,7 +29,11 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,13 +100,10 @@ private fun QuoteBox(blocks: List<Block>, loadImages: Boolean, onImageClick: (St
 
 @Composable
 fun PostImage(src: String, loadImages: Boolean, onClick: () -> Unit) {
-    if (!loadImages) {
-        OutlinedCard(onClick = onClick) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Image, null)
-                Text("Foto bekijken", Modifier.padding(start = 8.dp))
-            }
-        }
+    // Bij "niet automatisch laden": eerst een knop; een tik laadt de foto hier in het bericht.
+    var revealed by rememberSaveable(src) { mutableStateOf(false) }
+    if (!loadImages && !revealed) {
+        ShowPhotoButton(src, onClick = { revealed = true })
         return
     }
     SubcomposeAsyncImage(
@@ -137,6 +138,23 @@ fun PostImage(src: String, loadImages: Boolean, onClick: () -> Unit) {
             }
         },
     )
+}
+
+/** Knop "Foto bekijken", met de naam van de site als de foto van elders komt. */
+@Composable
+fun ShowPhotoButton(src: String, onClick: () -> Unit, label: String = "Foto bekijken") {
+    val host = remember(src) { runCatching { src.toUri().host }.getOrNull()?.removePrefix("www.") }
+    OutlinedCard(onClick = onClick) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Image, null, tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.padding(start = 12.dp)) {
+                Text(label, style = MaterialTheme.typography.titleSmall)
+                if (host != null && host != "zeilersforum.nl") Text(
+                    host, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
 }
 
 @Composable
