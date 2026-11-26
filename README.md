@@ -4,7 +4,7 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 
 - Kotlin, Jetpack Compose en Material 3 (Material You, donkere modus, edge-to-edge)
 - compileSdk/targetSdk 37 (Android 17), minSdk 26 (Android 8)
-- Pakketnaam `nl.kwillems.zeilersforum`. Ondertekend met een eigen sleutel (in signing/, niet in versiebeheer).
+- Pakketnaam `nl.kwillems.zeilersforum`
 
 ## Functies
 - Tabbladen **Recent** (Recente discussies), **Forum** (categorieën en subcategorieën), **Zoeken** (hele forum) en **Mijn** (meegedaan / zelf gestart)
@@ -26,10 +26,8 @@ Vereist: JDK 21 en de Android SDK (platform `android-37.2`).
 
 ```bash
 ./gradlew assembleDebug      # testversie (nl.kwillems.zeilersforum.debug, naast de echte app)
-./gradlew assembleRelease    # ondertekende versie in app/build/outputs/apk/release/
+./gradlew assembleRelease    # release-versie in app/build/outputs/apk/release/
 ```
-
-De ondertekensleutel staat in `signing/` (niet in versiebeheer). `signing/keystore.properties` verwijst ernaar. **Bewaar die map goed:** zonder deze sleutel kunnen updates niet over de bestaande app heen worden geïnstalleerd.
 
 ## Code
 | Bestand | Inhoud |
