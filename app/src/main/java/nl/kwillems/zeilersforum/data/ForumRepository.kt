@@ -212,7 +212,7 @@ class ForumRepository(
         const val RECENT_URL = "$BASE/index.php/forum-hoofdmenu-37/recente-onderwerpen"
         const val INDEX_URL = "$BASE/index.php/forum-125/index"
         const val SEARCH_URL = "$BASE/index.php/forum-hoofdmenu-37/zoeken"
-        const val MY_STARTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-default"
+        const val MY_STARTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-started"
         const val MY_POSTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-posted"
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android) ZeilersforumApp/3"
     }

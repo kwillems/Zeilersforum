@@ -339,7 +339,9 @@ private fun MyTopicsContent(
 ) {
     var mode by rememberSaveable { mutableIntStateOf(0) }
     val urls = listOf(ForumRepository.MY_POSTED_URL, ForumRepository.MY_STARTED_URL)
-    val vm = viewModel(key = "mine") { TopicListViewModel(app, urls[0], needsLogin = true) }
+    val vm = viewModel(key = "mine") { TopicListViewModel(app, urls[mode], needsLogin = true) }
+    // Houd de getoonde lijst gelijk aan de gekozen knop (ook na terugkeren naar dit tabblad).
+    LaunchedEffect(mode) { vm.switchTo(urls[mode]) }
     LaunchedEffect(loggedIn) { if (loggedIn && vm.state.value.needsLogin) vm.refresh(initial = true) }
 
     Column(modifier.fillMaxSize()) {
@@ -347,7 +349,7 @@ private fun MyTopicsContent(
             listOf("Meegedaan", "Zelf gestart").forEachIndexed { i, label ->
                 SegmentedButton(
                     selected = mode == i,
-                    onClick = { mode = i; vm.switchTo(urls[i]) },
+                    onClick = { mode = i },
                     shape = SegmentedButtonDefaults.itemShape(i, 2),
                 ) { Text(label) }
             }
