@@ -3,6 +3,7 @@ package nl.kwillems.zeilersforum.ui.screens
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -98,6 +100,7 @@ fun TopicScreen(
     onReply: (replyUrl: String, title: String, quote: String?) -> Unit,
     onLogin: () -> Unit,
     onOpenTopic: (String) -> Unit,
+    onOpenCategory: (url: String, name: String) -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle(initialValue = Settings())
@@ -144,7 +147,25 @@ fun TopicScreen(
                 title = {
                     val collapsed = scroll.state.collapsedFraction > 0.5f
                     Column {
-                        Text(state.title, maxLines = if (collapsed) 1 else 2, overflow = TextOverflow.Ellipsis)
+                        if (!collapsed) {
+                            Text("Zeilersforum", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                            if (state.forumName.isNotBlank()) Text(
+                                state.forumName,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = state.forumUrl?.let { u ->
+                                    Modifier.clickable(role = Role.Button) { onOpenCategory(u, state.forumName) }
+                                } ?: Modifier,
+                            )
+                        }
+                        Text(
+                            state.title,
+                            style = if (collapsed) LocalTextStyle.current else MaterialTheme.typography.titleLarge,
+                            maxLines = if (collapsed) 1 else 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         if (state.totalPages > 1 && !collapsed) Text(
                             "${state.totalPages} pagina's · ${if (state.order == PostOrder.NEWEST_FIRST) "nieuwste eerst" else "oudste eerst"}",
                             style = MaterialTheme.typography.labelMedium,
@@ -152,6 +173,7 @@ fun TopicScreen(
                         )
                     }
                 },
+                expandedHeight = 184.dp,
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Terug") } },
                 actions = {
                     IconButton(onClick = vm::toggleOrder) {

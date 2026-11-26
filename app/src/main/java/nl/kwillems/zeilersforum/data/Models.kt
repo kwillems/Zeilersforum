@@ -119,6 +119,9 @@ data class TopicPage(
     val loggedIn: Boolean,
     /** "Wie leest er mee?": leden die dit onderwerp nu bekijken (alleen zichtbaar als je bent ingelogd). */
     val readers: List<OnlineMember>? = null,
+    /** Forum (categorie) waarin het onderwerp staat, uit het kruimelpad. */
+    val forumName: String = "",
+    val forumUrl: String? = null,
 )
 
 typealias ReplyForm = PostForm

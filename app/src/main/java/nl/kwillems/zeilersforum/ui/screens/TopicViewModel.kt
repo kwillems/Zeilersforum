@@ -33,6 +33,9 @@ data class TopicState(
     val loggedIn: Boolean = false,
     /** "Wie leest er mee?" (alleen als je bent ingelogd). */
     val readers: List<OnlineMember> = emptyList(),
+    /** Forum (categorie) van het onderwerp. */
+    val forumName: String = "",
+    val forumUrl: String? = null,
 )
 
 /**
@@ -78,6 +81,8 @@ class TopicViewModel(
                 totalPages = page.totalPages,
                 replyUrl = page.replyUrl ?: it.replyUrl,
                 loggedIn = page.loggedIn,
+                forumName = page.forumName.ifBlank { it.forumName },
+                forumUrl = page.forumUrl ?: it.forumUrl,
                 readers = page.readers ?: if (page.loggedIn) it.readers else emptyList(),
             )
         }

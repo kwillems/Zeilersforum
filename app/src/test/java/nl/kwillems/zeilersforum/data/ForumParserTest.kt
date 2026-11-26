@@ -42,6 +42,8 @@ class ForumParserTest {
         assertTrue(p.posts.all { it.author.isNotBlank() && it.id.isNotBlank() })
         assertTrue(p.posts.any { post -> post.blocks.any { it is Block.Quote } })
         assertEquals(null, p.readers) // als gast staat "Wie leest er mee?" er niet
+        assertEquals("Algemene vragen techniek & onderhoud", p.forumName)
+        assertTrue(p.forumUrl!!.startsWith("https://zeilersforum.nl/index.php/forum-hoofdmenu-37/82-"))
     }
 
     @Test fun readersBlock() {

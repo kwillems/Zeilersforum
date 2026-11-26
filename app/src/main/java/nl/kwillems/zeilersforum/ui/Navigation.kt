@@ -129,6 +129,7 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                 onReply = { replyUrl, title, quote -> nav.navigate(ReplyRoute(replyUrl, title, quote)) },
                 onLogin = { nav.navigate(LoginRoute) },
                 onOpenTopic = { url -> nav.navigate(TopicRoute(url)) },
+                onOpenCategory = { url, name -> nav.navigate(CategoryRoute(url, name)) },
             )
         }
         composable<ImagesRoute> { entry ->

@@ -132,6 +132,7 @@ object ForumParser {
 
         val (page, total) = pagination(doc)
         val perPage = perPage(doc)
+        val forum = pathwayForum(doc)
         if (posts.isEmpty() && doc.text().contains("Toegang geweigerd")) {
             throw ForumException("Toegang geweigerd")
         }
@@ -145,7 +146,15 @@ object ForumParser {
             replyUrl = findReplyUrl(doc),
             loggedIn = isLoggedIn(doc),
             readers = parseReaders(doc),
+            forumName = forum?.text()?.trim().orEmpty(),
+            forumUrl = forum?.absUrl("href")?.let(::fixUrl),
         )
+    }
+
+    /** Laatste categorie in het kruimelpad (het element vóór het onderwerp zelf). */
+    private fun pathwayForum(doc: Document): Element? {
+        val links = doc.selectFirst("div.kforum-pathway")?.select("div.path-element a[href], div.path-element-first a[href]").orEmpty()
+        return if (links.size >= 2) links[links.size - 2] else null
     }
 
     /**
