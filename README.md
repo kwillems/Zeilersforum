@@ -41,3 +41,12 @@ Vereist: JDK 21 en de Android SDK (platform `android-37.2`).
 | `ui/screens/*` | De schermen |
 
 Verandert de website, dan hoeft meestal alleen `ForumParser.kt` aangepast te worden.
+
+## Licentie
+Copyright © 2026 Koen Willems
+
+De code van deze app is vrije software onder de [GNU General Public License versie 3](LICENSE) (GPL-3.0). Je mag hem gebruiken, aanpassen en verspreiden, mits een aangepaste versie ook onder de GPL-3.0 en met broncode beschikbaar komt. De software wordt geleverd zonder enige garantie.
+
+De licentie geldt alleen voor de code. De naam **Zeilersforum**, het logo en app-icoon en de inhoud van [zeilersforum.nl](https://zeilersforum.nl) zijn van het forum en vallen er niet onder.
+
+Gebruikte bibliotheken (AndroidX, Jetpack Compose, OkHttp, Coil, kotlinx) vallen onder de Apache License 2.0, jsoup onder de MIT-licentie.
