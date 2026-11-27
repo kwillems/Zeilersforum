@@ -80,7 +80,17 @@ data class PostForm(
     val message: String = "",
     /** false als de site het onderwerpveld grijs maakt (bewerken van een reactie). */
     val subjectEditable: Boolean = true,
+    /** Bijlagen die al bij het bericht horen (bij bewerken). */
+    val attachments: List<FormAttachment> = emptyList(),
 )
+
+/**
+ * Bestaande bijlage in het bewerkformulier. De site houdt hem alleen als het vakje
+ * attachment[id] wordt meegestuurd; weglaten = verwijderen.
+ */
+data class FormAttachment(val id: String, val name: String, val url: String, val thumb: String?) {
+    val keepField: String get() = "attachment[$id]"
+}
 
 /** Inhoud van een bericht, opgesplitst in blokken die Compose kan tonen. */
 sealed interface Block {

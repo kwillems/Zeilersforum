@@ -523,7 +523,22 @@ object ForumParser {
         // Net als de oorspronkelijke app wordt naar de URL van het formulier zelf gepost.
         val message = form.selectFirst("textarea[name=message]")?.wholeText().orEmpty()
         val subjectEditable = form.selectFirst("input[name=subject]:not([type=hidden])")?.hasAttr("disabled") != true
-        return PostForm(postUrl = url, fields = fields, subject = subject, message = message, subjectEditable = subjectEditable)
+        val attachments = form.select("li.kattachment-old").mapNotNull { li ->
+            val id = li.selectFirst("input[type=checkbox][name^='attachment[']")?.attr("name")
+                ?.substringAfter('[')?.substringBefore(']')?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val link = li.selectFirst("a[href]:not(.kattachment-insert)")
+            FormAttachment(
+                id = id,
+                name = li.selectFirst("input[type=hidden][name='attachments[$id]']")?.attr("value")?.takeIf { it.isNotBlank() }
+                    ?: link?.attr("title").orEmpty(),
+                url = link?.absUrl("href")?.let(::fixUrl).orEmpty(),
+                thumb = li.selectFirst("img")?.absUrl("src")?.takeIf { it.isNotBlank() }?.let(::fixUrl),
+            )
+        }
+        return PostForm(
+            postUrl = url, fields = fields, subject = subject, message = message,
+            subjectEditable = subjectEditable, attachments = attachments,
+        )
     }
 
     fun replyForm(html: String, url: String, fallbackSubject: String): ReplyForm = postForm(html, url, fallbackSubject)

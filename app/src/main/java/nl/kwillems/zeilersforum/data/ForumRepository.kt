@@ -315,7 +315,11 @@ class ForumRepository(
 
     // ---------- Reageren ----------
 
-    class Image(val fileName: String, val jpeg: ByteArray)
+    /**
+     * Een bijlage om te versturen. Foto's ([inline]) worden ook in de tekst gezet met
+     * [attachment:n]naam[/attachment]; andere bestanden staan alleen onder het bericht.
+     */
+    class Upload(val fileName: String, val bytes: ByteArray, val mimeType: String, val inline: Boolean)
 
     suspend fun replyForm(replyUrl: String, topicTitle: String): ReplyForm {
         var html = get(replyUrl)
@@ -328,7 +332,7 @@ class ForumRepository(
      * en worden in de tekst opgenomen met [attachment:n]naam[/attachment],
      * net als in de oorspronkelijke app.
      */
-    suspend fun postReply(form: ReplyForm, message: String, images: List<Image>) {
+    suspend fun postReply(form: ReplyForm, message: String, images: List<Upload>) {
         submit(form, form.subject, message, images)
     }
 
@@ -339,9 +343,14 @@ class ForumRepository(
         return withContext(Dispatchers.Default) { ForumParser.postForm(html, editUrl, "") }
     }
 
-    /** Slaat een bewerkt bericht op. Nieuwe foto's komen erbij; bestaande bijlagen blijven staan. */
-    suspend fun editPost(form: PostForm, subject: String, message: String, images: List<Image>) {
-        submit(form, subject.ifBlank { form.subject }, message, images, succeeded = ForumParser::editSucceeded)
+    /**
+     * Slaat een bewerkt bericht op. Nieuwe foto's komen erbij; bestaande bijlagen blijven staan,
+     * behalve die in [removeAttachments] (hun vakje "behouden" wordt dan niet meegestuurd).
+     */
+    suspend fun editPost(form: PostForm, subject: String, message: String, images: List<Upload>, removeAttachments: Set<String> = emptySet()) {
+        val drop = form.attachments.filter { it.id in removeAttachments }.map { it.keepField }.toSet()
+        val kept = form.copy(fields = LinkedHashMap(form.fields.filterKeys { it !in drop }))
+        submit(kept, subject.ifBlank { form.subject }, message, images, succeeded = ForumParser::editSucceeded)
     }
 
     /** Verwijdert een eigen bericht via de link "Verwijder" (bevat het beveiligingstoken van de site). */
@@ -363,19 +372,19 @@ class ForumRepository(
     }
 
     /** Start een nieuw onderwerp; geeft de URL van het nieuwe onderwerp terug (als bekend). */
-    suspend fun createTopic(form: PostForm, subject: String, message: String, images: List<Image>): String? {
+    suspend fun createTopic(form: PostForm, subject: String, message: String, images: List<Upload>): String? {
         val finalUrl = submit(form, subject.trim(), message, images)
         return finalUrl.takeIf { Regex("/\\d+-[^/]+").containsMatchIn(it) && !it.contains("/create") }
     }
 
     private suspend fun submit(
-        form: PostForm, subject: String, message: String, images: List<Image>,
+        form: PostForm, subject: String, message: String, images: List<Upload>,
         succeeded: (String) -> Boolean = ForumParser::replySucceeded,
     ): String {
         val text = buildString {
             append(message.trimEnd())
             images.forEachIndexed { i, img ->
-                append("\n\n[attachment:${i + 1}]${img.fileName}[/attachment]")
+                if (img.inline) append("\n\n[attachment:${i + 1}]${img.fileName}[/attachment]")
             }
         }
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
@@ -383,7 +392,7 @@ class ForumRepository(
             addFormDataPart("subject", subject)
             addFormDataPart("message", text)
             images.forEachIndexed { i, img ->
-                addFormDataPart("kattachment${i + 1}", img.fileName, img.jpeg.toRequestBody("image/jpeg".toMediaType()))
+                addFormDataPart("kattachment${i + 1}", img.fileName, img.bytes.toRequestBody(img.mimeType.toMediaType()))
             }
         }.build()
         val (result, finalUrl) = postWithUrl(form.postUrl, body)
@@ -404,5 +413,11 @@ class ForumRepository(
         const val PM_URL = "$BASE/index.php/component/uddeim/"
         const val MY_POSTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-posted"
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android) ZeilersforumApp/3"
+
+        /** Bestandstypen die het forum als bijlage accepteert. */
+        val ALLOWED_EXTENSIONS = listOf(
+            "jpg", "jpeg", "gif", "png", "eps", "zip", "txt", "doc", "gz", "tgz",
+            "docx", "pdf", "xlsx", "odt", "gpx", "ods",
+        )
     }
 }

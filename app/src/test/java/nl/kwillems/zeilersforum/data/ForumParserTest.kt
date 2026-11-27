@@ -209,12 +209,22 @@ class ForumParserTest {
             <input type="text" name="subject" value="Re: Test" disabled><input type="hidden" name="subject" value="Re: Test">
             <textarea name="message">Regel 1
 Regel 2</textarea>
-            <input type="checkbox" name="attachments[7]" value="1" checked>
+            <ul class="kfile-attach-editing"><li class="kattachment-old"><span>
+            <input type="hidden" name="attachments[7]" value="foto_1.jpg">
+            <input type="checkbox" name="attachment[7]" checked value="7">
+            <a href="#" class="kattachment-insert" style="display: none;">Voeg in</a></span>
+            <a href="/media/kunena/attachments/5/foto_1.jpg" title="...1.jpg"><img src="/media/kunena/attachments/5/foto_1.jpg"></a></li></ul>
             <input type="checkbox" name="subscribeMe" value="1"></form>"""
         val form = ForumParser.postForm(html, ForumParser.BASE + "/x/edit/11", "")
         assertEquals("Regel 1\nRegel 2", form.message)
         assertFalse(form.subjectEditable)
-        assertEquals("1", form.fields["attachments[7]"])
+        assertEquals("7", form.fields["attachment[7]"])
+        assertEquals(1, form.attachments.size)
+        val att = form.attachments[0]
+        assertEquals("7", att.id)
+        assertEquals("foto_1.jpg", att.name)
+        assertEquals(ForumParser.BASE + "/media/kunena/attachments/5/foto_1.jpg", att.url)
+        assertEquals("attachment[7]", att.keepField)
         assertEquals("edit", form.fields["task"])
         assertFalse("subscribeMe" in form.fields)
     }
