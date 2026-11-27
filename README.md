@@ -2,10 +2,6 @@
 
 Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe versie (3.x) die de oorspronkelijke app uit 2016–2017 vervangt.
 
-- Kotlin, Jetpack Compose en Material 3 (Material You, donkere modus, edge-to-edge)
-- compileSdk/targetSdk 37 (Android 17), minSdk 26 (Android 8)
-- Pakketnaam `nl.kwillems.zeilersforum`
-
 ## Functies
 - Tabbladen **Recent** (Recente discussies, periode instelbaar: sinds laatste bezoek, uren, week, maand, jaar of alles), **Forum** (categorieën en subcategorieën), **Zoeken** (hele forum) en **Mijn** (meegedaan / zelf gestart)
 - Nieuw onderwerp starten vanuit een categorie
@@ -25,6 +21,8 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 ## Installeren
 De app staat niet in de Play Store. Je installeert hem één keer zelf; daarna werkt hij zichzelf bij.
 
+Je hebt een Android-telefoon of -tablet nodig met **Android 8 of nieuwer**. De app past zich aan het kleurenthema van je toestel aan en wordt donker als je toestel op donker staat.
+
 ### De eerste keer
 1. Open op je Android-toestel in Chrome de [nieuwste release](https://github.com/kwillems/Zeilersforum/releases/latest) en tik op het bestand `zeilersforum-x.y.z.apk`. Het komt in **Downloads**.
 2. Tik op de melding van de download (of open het bestand in Downloads).
@@ -43,6 +41,10 @@ Heb je nog de oude app (2.x)? Die heeft een andere pakketnaam, blijft gewoon naa
 4. Tik op **Installeren** en bevestig bij Android met **Updaten**. De app sluit, wordt bijgewerkt en je tikt op **Openen**. Instellingen en inlog blijven bewaard.
 
 ## Bouwen
+- Kotlin, Jetpack Compose en Material 3 (Material You, donkere modus, edge-to-edge)
+- compileSdk/targetSdk 37 (Android 17), minSdk 26 (Android 8)
+- Pakketnaam `nl.kwillems.zeilersforum`
+
 Vereist: JDK 21 en de Android SDK (platform `android-37.2`).
 
 ```bash
