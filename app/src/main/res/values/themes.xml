@@ -3,8 +3,8 @@
     <style name="Theme.Zeilersforum" parent="android:Theme.Material.Light.NoActionBar" />
 
     <style name="Theme.Zeilersforum.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#3F6FA8</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenBackground">#2A5F98</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_sails</item>
         <item name="postSplashScreenTheme">@style/Theme.Zeilersforum</item>
     </style>
 </resources>

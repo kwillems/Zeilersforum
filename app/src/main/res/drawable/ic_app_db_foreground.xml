@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App-icoon 'Ballon zee', voorgrond. Gemaakt met art/iconen/maak_iconen.py; niet met de hand aanpassen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.95" android:scaleY="0.95" android:pivotX="54" android:pivotY="54"><group><clip-path android:pathData="M34,28 H74 A9,9 0 0 1 83,37 V66 A9,9 0 0 1 74,75 H50 L37,85 L40,75 H34 A9,9 0 0 1 25,66 V37 A9,9 0 0 1 34,28 Z"/><path android:fillColor="#FF8EC0EC" android:pathData="M0,0 H108 V108 H0 Z"/><path android:fillColor="#FF1E5D9C" android:pathData="M0,60 Q10,57 20,60 T40,60 T60,60 T80,60 T100,60 T120,60 V108 H0 Z"/></group><group android:translateX="55" android:translateY="52"><group android:scaleX="0.42" android:scaleY="0.42"><group android:translateX="-68" android:translateY="-56"><path android:fillColor="#FFFFFFFF" android:pathData="M75,16.5 C55,30 42,60 40.3,97.5 L70.3,76 Q60,48 75,16.5 Z"/><path android:fillColor="#FFFFFFFF" android:pathData="M96.5,10.3 Q70,42 82.5,78 L46,102 Q72,95 94.7,85 Q86,50 96.5,10.3 Z"/></group></group></group></group>
+</vector>

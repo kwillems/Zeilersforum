@@ -40,6 +40,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +56,7 @@ import nl.kwillems.zeilersforum.data.PostOrder
 import nl.kwillems.zeilersforum.data.RecentPeriod
 import nl.kwillems.zeilersforum.data.Settings
 import nl.kwillems.zeilersforum.data.ThemeMode
+import nl.kwillems.zeilersforum.ui.AppIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +67,40 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     var editSignature by remember { mutableStateOf(false) }
     var debugResult by remember { mutableStateOf<String?>(null) }
     var choosePeriod by remember { mutableStateOf(false) }
+    var chooseIcon by remember { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var appIcon by remember { mutableStateOf(AppIcon.current(ctx)) }
+
+    if (chooseIcon) AlertDialog(
+        onDismissRequest = { chooseIcon = false },
+        title = { Text("App-icoon") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Het icoon op je startscherm verandert na een paar seconden. Verdwijnt het van je startscherm, " +
+                        "sleep het dan opnieuw uit de app-lijst.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AppIcon.entries.forEach { icon ->
+                        IconChoice(icon, selected = icon == appIcon) {
+                            if (icon != appIcon) {
+                                AppIcon.set(ctx, icon)
+                                appIcon = icon
+                            }
+                            chooseIcon = false
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { chooseIcon = false }) { Text("Sluiten") } },
+    )
 
     if (choosePeriod) AlertDialog(
         onDismissRequest = { choosePeriod = false },
@@ -176,6 +217,12 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Section("Weergave")
+            ListItem(
+                headlineContent = { Text("App-icoon") },
+                supportingContent = { Text(appIcon.label) },
+                leadingContent = { AppIconImage(appIcon, 40.dp) },
+                modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = { chooseIcon = true }),
+            )
             Choice("Systeem volgen", null, s.themeMode == ThemeMode.SYSTEM) { scope.launch { app.settings.setThemeMode(ThemeMode.SYSTEM) } }
             Choice("Licht", null, s.themeMode == ThemeMode.LIGHT) { scope.launch { app.settings.setThemeMode(ThemeMode.LIGHT) } }
             Choice("Donker", null, s.themeMode == ThemeMode.DARK) { scope.launch { app.settings.setThemeMode(ThemeMode.DARK) } }
@@ -251,4 +298,41 @@ private fun Toggle(title: String, subtitle: String?, checked: Boolean, onChange:
         trailingContent = { Switch(checked = checked, onCheckedChange = null) },
         modifier = Modifier.selectable(selected = checked, onClick = { onChange(!checked) }, role = Role.Switch),
     )
+}
+
+/** Het app-icoon zoals de launcher het tekent (met de vorm van dit toestel). */
+@Composable
+private fun AppIconImage(icon: AppIcon, size: androidx.compose.ui.unit.Dp) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { size.roundToPx() }
+    val bitmap = remember(icon, px) {
+        androidx.core.content.ContextCompat.getDrawable(ctx, icon.icon)!!.toBitmap(px, px).asImageBitmap()
+    }
+    androidx.compose.foundation.Image(bitmap, contentDescription = null, modifier = Modifier.size(size))
+}
+
+@Composable
+private fun IconChoice(icon: AppIcon, selected: Boolean, onClick: () -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+    Column(
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(76.dp)
+            .clip(shape)
+            .then(
+                if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+                else Modifier
+            )
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 2.dp),
+    ) {
+        AppIconImage(icon, 52.dp)
+        Text(
+            icon.label,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 2,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
 }

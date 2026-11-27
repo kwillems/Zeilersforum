@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App-icoon 'Diepzee', achtergrond. Gemaakt met art/iconen/maak_iconen.py; niet met de hand aanpassen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M0,0 H108 V108 H0 Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="0" android:endX="0" android:endY="108" android:startColor="#FF145A9A" android:endColor="#FF072A4C"/></aapt:attr></path><path android:fillColor="#8C2B86C8" android:pathData="M0,80 Q13.5,75 27,80 T54,80 T81,80 T108,80 V108 H0 Z"/>
+</vector>
