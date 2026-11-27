@@ -29,6 +29,10 @@ data class TopicState(
     val loadingMore: Boolean = false,
     val refreshing: Boolean = false,
     val error: String? = null,
+    /** Korte melding voor de gebruiker (bijvoorbeeld "Bericht verwijderd"). */
+    val notice: String? = null,
+    /** Id van het bericht dat nu wordt verwijderd. */
+    val deleting: String? = null,
     val replyUrl: String? = null,
     val loggedIn: Boolean = false,
     /** "Wie leest er mee?" (alleen als je bent ingelogd). */
@@ -170,6 +174,21 @@ class TopicViewModel(
     }
 
     fun clearError() = _state.update { it.copy(error = null) }
+    fun clearNotice() = _state.update { it.copy(notice = null) }
+
+    /** Verwijdert een eigen bericht en laadt het onderwerp opnieuw. */
+    fun deletePost(post: Post) {
+        val url = post.deleteUrl ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(deleting = post.id) }
+            runCatching { app.forum.deletePost(url) }
+                .onSuccess {
+                    _state.update { it.copy(deleting = null, notice = "Bericht verwijderd") }
+                    refresh()
+                }
+                .onFailure { e -> _state.update { it.copy(deleting = null, error = e.friendly()) } }
+        }
+    }
 
     val webUrl: String get() = baseUrl
 }

@@ -95,6 +95,8 @@ class ReplyViewModel(
     quote: String?,
     /** true = nieuw onderwerp starten; [replyUrl] is dan de link "Nieuw onderwerp". */
     val newTopic: Boolean = false,
+    /** true = eigen bericht bewerken; [replyUrl] is dan de link "Bewerk". */
+    val edit: Boolean = false,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReplyState(text = quote.orEmpty()))
     val state: StateFlow<ReplyState> = _state
@@ -105,8 +107,20 @@ class ReplyViewModel(
     fun loadForm() {
         viewModelScope.launch {
             _state.update { it.copy(loadingForm = true, error = null, needsLogin = false) }
-            runCatching { if (newTopic) app.forum.newTopicForm(replyUrl) else app.forum.replyForm(replyUrl, topicTitle) }
-                .onSuccess { f -> _state.update { it.copy(form = f, loadingForm = false) } }
+            runCatching {
+                when {
+                    edit -> app.forum.editForm(replyUrl)
+                    newTopic -> app.forum.newTopicForm(replyUrl)
+                    else -> app.forum.replyForm(replyUrl, topicTitle)
+                }
+            }
+                .onSuccess { f ->
+                    _state.update {
+                        // Bij bewerken de huidige tekst en titel invullen (alleen de eerste keer).
+                        if (edit && it.form == null) it.copy(form = f, loadingForm = false, text = f.message.trimEnd(), subject = f.subject)
+                        else it.copy(form = f, loadingForm = false)
+                    }
+                }
                 .onFailure { e ->
                     _state.update {
                         it.copy(loadingForm = false, needsLogin = e is NotLoggedInException, error = if (e is NotLoggedInException) null else e.friendly())
@@ -136,8 +150,11 @@ class ReplyViewModel(
                         ForumRepository.Image("foto_${System.currentTimeMillis()}_${i + 1}.jpg", compress(context, uri))
                     }
                 }
-                if (newTopic) app.forum.createTopic(form, s.subject, s.text, images)
-                else { app.forum.postReply(form, s.text, images); null }
+                when {
+                    edit -> { app.forum.editPost(form, s.subject, s.text, images); null }
+                    newTopic -> app.forum.createTopic(form, s.subject, s.text, images)
+                    else -> { app.forum.postReply(form, s.text, images); null }
+                }
             }.onSuccess { url ->
                 _state.update { it.copy(sending = false, posted = true, newTopicUrl = url) }
             }.onFailure { e ->
@@ -203,7 +220,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
             TopAppBar(
                 title = {
                     Column {
-                        Text(if (vm.newTopic) "Nieuw onderwerp" else "Reageren")
+                        Text(when { vm.edit -> "Bericht bewerken"; vm.newTopic -> "Nieuw onderwerp"; else -> "Reageren" })
                         Text(vm.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
@@ -225,7 +242,11 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
             when {
                 state.loadingForm -> CircularProgressIndicator(Modifier.padding(32.dp))
                 state.needsLogin -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (vm.newTopic) "Je moet ingelogd zijn om een onderwerp te starten." else "Je moet ingelogd zijn om te reageren.")
+                    Text(when {
+                        vm.edit -> "Je moet ingelogd zijn om een bericht te bewerken."
+                        vm.newTopic -> "Je moet ingelogd zijn om een onderwerp te starten."
+                        else -> "Je moet ingelogd zijn om te reageren."
+                    })
                     Button(onClick = onLogin, modifier = Modifier.padding(top = 16.dp)) { Text("Inloggen") }
                 }
                 state.form == null -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -236,7 +257,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                     Modifier.widthIn(max = 840.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (vm.newTopic) OutlinedTextField(
+                    if (vm.newTopic || (vm.edit && state.form?.subjectEditable == true)) OutlinedTextField(
                         value = state.subject,
                         onValueChange = vm::setSubject,
                         label = { Text("Onderwerp") },
@@ -248,7 +269,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                     OutlinedTextField(
                         value = state.text,
                         onValueChange = vm::setText,
-                        label = { Text(if (vm.newTopic) "Je bericht" else "Je reactie") },
+                        label = { Text(if (vm.newTopic || vm.edit) "Je bericht" else "Je reactie") },
                         minLines = 8,
                         enabled = !state.sending,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),

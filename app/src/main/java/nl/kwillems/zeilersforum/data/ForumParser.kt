@@ -227,8 +227,14 @@ object ForumParser {
             blocks = textEl?.let { contentBlocks(it) } ?: emptyList(),
             attachments = attachments,
             plainText = textEl?.let { plainText(it) }.orEmpty(),
+            editUrl = actionLink(table, "edit"),
+            deleteUrl = actionLink(table, "delete"),
         )
     }
+
+    /** Knop onder een bericht (Bewerk, Verwijder), herkenbaar aan het span erin. */
+    private fun actionLink(table: Element, kind: String): String? =
+        table.select("a[href]").firstOrNull { it.selectFirst("span.$kind") != null }?.absUrl("href")?.takeIf { it.isNotBlank() }
 
     /** Je eigen avatar uit het blok "Welkom, …" bovenaan forumpagina's (alleen als je bent ingelogd). */
     fun myAvatar(doc: Document): String? =
@@ -515,13 +521,34 @@ object ForumParser {
         }
         val subject = form.selectFirst("input[name=subject]")?.attr("value")?.takeIf { it.isNotBlank() } ?: fallbackSubject
         // Net als de oorspronkelijke app wordt naar de URL van het formulier zelf gepost.
-        return PostForm(postUrl = url, fields = fields, subject = subject)
+        val message = form.selectFirst("textarea[name=message]")?.wholeText().orEmpty()
+        val subjectEditable = form.selectFirst("input[name=subject]:not([type=hidden])")?.hasAttr("disabled") != true
+        return PostForm(postUrl = url, fields = fields, subject = subject, message = message, subjectEditable = subjectEditable)
     }
 
     fun replyForm(html: String, url: String, fallbackSubject: String): ReplyForm = postForm(html, url, fallbackSubject)
 
+    /** "Bericht succesvol geplaatst" na een reactie, "Bericht succesvol bijgewerkt." na bewerken. */
     fun replySucceeded(html: String): Boolean =
-        html.contains("Bericht succesvol geplaatst")
+        Regex("""succesvol\s+(geplaatst|bijgewerkt|bewerkt|gewijzigd|opgeslagen)""", RegexOption.IGNORE_CASE).containsMatchIn(html)
+
+    /**
+     * Na bewerken toont de site een andere melding dan na een reactie. Gelukt als die melding er is,
+     * of als er geen foutmelding staat en het bewerkformulier niet opnieuw wordt getoond.
+     */
+    fun editSucceeded(html: String): Boolean {
+        if (replySucceeded(html)) return true
+        val doc = Jsoup.parse(html)
+        // Let op: onder een onderwerp staat ook een snel-reageervak met textarea[name=message].
+        return doc.selectFirst("div.alert-error, dd.error, dl#system-message dd.error") == null &&
+            doc.selectFirst("form#postform") == null && doc.selectFirst("input[name=passwd]") == null
+    }
+
+    /** Foutmelding na "Verwijder", of null als het bericht weg is. */
+    fun deleteError(html: String): String? {
+        if (Regex("""succesvol\s+verwijderd|is\s+verwijderd""", RegexOption.IGNORE_CASE).containsMatchIn(html)) return null
+        return Jsoup.parse(html).selectFirst("div.alert-error div.alert-message, div.alert-error")?.text()?.takeIf { it.isNotBlank() }
+    }
 
     fun pageError(html: String): String? =
         Jsoup.parse(html).selectFirst("div.alert-error div.alert-message, div.alert-error, div.alert-message")?.text()

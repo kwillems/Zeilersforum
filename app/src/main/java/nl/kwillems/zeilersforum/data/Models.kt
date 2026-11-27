@@ -76,6 +76,10 @@ data class PostForm(
     val postUrl: String,
     val fields: LinkedHashMap<String, String>,
     val subject: String,
+    /** Huidige tekst (BBCode) bij het bewerken van een bericht. */
+    val message: String = "",
+    /** false als de site het onderwerpveld grijs maakt (bewerken van een reactie). */
+    val subjectEditable: Boolean = true,
 )
 
 /** Inhoud van een bericht, opgesplitst in blokken die Compose kan tonen. */
@@ -107,6 +111,10 @@ data class Post(
     val attachments: List<Attachment>,
     /** Platte tekst van het bericht, voor citeren en delen. */
     val plainText: String,
+    /** Link "Bewerk" (alleen bij je eigen berichten, zolang de site het toestaat). */
+    val editUrl: String? = null,
+    /** Link "Verwijder" (alleen bij je eigen bericht, zolang de site het toestaat). */
+    val deleteUrl: String? = null,
 )
 
 data class TopicPage(

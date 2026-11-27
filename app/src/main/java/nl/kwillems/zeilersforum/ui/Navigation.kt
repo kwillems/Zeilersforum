@@ -33,7 +33,7 @@ import nl.kwillems.zeilersforum.ui.screens.TopicListViewModel
 @Serializable object TopicsRoute
 @Serializable data class TopicRoute(val url: String, val title: String = "", val lastPageUrl: String? = null)
 @Serializable data class ImagesRoute(val index: Int)
-@Serializable data class ReplyRoute(val replyUrl: String, val topicTitle: String, val quote: String? = null, val newTopic: Boolean = false)
+@Serializable data class ReplyRoute(val replyUrl: String, val topicTitle: String, val quote: String? = null, val newTopic: Boolean = false, val edit: Boolean = false)
 @Serializable data class CategoryRoute(val url: String, val title: String)
 @Serializable object LoginRoute
 @Serializable data class PmRoute(val id: String, val outbox: Boolean, val partner: String)
@@ -127,6 +127,7 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                     nav.navigate(ImagesRoute(index))
                 },
                 onReply = { replyUrl, title, quote -> nav.navigate(ReplyRoute(replyUrl, title, quote)) },
+                onEdit = { editUrl, title -> nav.navigate(ReplyRoute(editUrl, title, edit = true)) },
                 onLogin = { nav.navigate(LoginRoute) },
                 onOpenTopic = { url -> nav.navigate(TopicRoute(url)) },
                 onOpenCategory = { url, name -> nav.navigate(CategoryRoute(url, name)) },
@@ -138,7 +139,7 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
         }
         composable<ReplyRoute> { entry ->
             val route = entry.toRoute<ReplyRoute>()
-            val vm = viewModel { ReplyViewModel(app, route.replyUrl, route.topicTitle, route.quote, route.newTopic) }
+            val vm = viewModel { ReplyViewModel(app, route.replyUrl, route.topicTitle, route.quote, route.newTopic, route.edit) }
             ReplyScreen(
                 vm = vm,
                 onBack = { nav.popBackStack() },

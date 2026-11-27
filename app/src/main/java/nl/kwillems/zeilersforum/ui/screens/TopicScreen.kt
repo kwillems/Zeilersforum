@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Login
@@ -98,6 +100,7 @@ fun TopicScreen(
     onBack: () -> Unit,
     onOpenImages: (List<String>, Int) -> Unit,
     onReply: (replyUrl: String, title: String, quote: String?) -> Unit,
+    onEdit: (editUrl: String, title: String) -> Unit,
     onLogin: () -> Unit,
     onOpenTopic: (String) -> Unit,
     onOpenCategory: (url: String, name: String) -> Unit,
@@ -120,6 +123,9 @@ fun TopicScreen(
             onRefreshHandled()
             if (state.order == PostOrder.NEWEST_FIRST) listState.scrollToItem(0)
         }
+    }
+    LaunchedEffect(state.notice) {
+        state.notice?.let { snackbar.showSnackbar(it); vm.clearNotice() }
     }
     LaunchedEffect(state.error, state.posts.isEmpty()) {
         val err = state.error
@@ -251,6 +257,9 @@ fun TopicScreen(
                                 val quote = "[quote=\"${post.author}\" post=${post.id}]${post.plainText}[/quote]\n"
                                 onReply(state.replyUrl!!, state.title, quote)
                             },
+                            onEdit = post.editUrl?.let { url -> { onEdit(url, state.title) } },
+                            onDelete = post.deleteUrl?.let { { vm.deletePost(post) } },
+                            deleting = state.deleting == post.id,
                             onOpenImages = onOpenImages,
                             modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth(),
                         )
@@ -307,9 +316,26 @@ private fun PostCard(
     loadImages: Boolean,
     canQuote: Boolean,
     onQuote: () -> Unit,
+    onEdit: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+    deleting: Boolean,
     onOpenImages: (List<String>, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Bericht verwijderen?") },
+            text = { Text("Je bericht wordt van het forum gehaald. Dit kun je niet ongedaan maken.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text("Verwijderen", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Annuleren") } },
+        )
+    }
     val inline = remember(post) {
         fun collect(blocks: List<Block>): List<String> = blocks.flatMap {
             when (it) {
@@ -395,11 +421,26 @@ private fun PostCard(
                     }
                 }
             }
-            if (canQuote) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onQuote) {
+            if (canQuote || onEdit != null || onDelete != null) Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (canQuote) TextButton(onClick = onQuote) {
                     Icon(Icons.Filled.FormatQuote, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Citeren")
+                }
+                if (onEdit != null) TextButton(onClick = onEdit, enabled = !deleting) {
+                    Icon(Icons.Filled.Edit, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Bewerken")
+                }
+                if (deleting) CircularProgressIndicator(Modifier.padding(horizontal = 12.dp).size(20.dp))
+                else if (onDelete != null) TextButton(onClick = { confirmDelete = true }) {
+                    Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Verwijderen", color = MaterialTheme.colorScheme.error)
                 }
             }
         }

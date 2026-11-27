@@ -332,6 +332,26 @@ class ForumRepository(
         submit(form, form.subject, message, images)
     }
 
+    /** Bewerkformulier van een eigen bericht (link "Bewerk"), met de huidige tekst. */
+    suspend fun editForm(editUrl: String): PostForm {
+        val html = getAsMember(editUrl)
+        debugDump?.invoke("bewerken", withContext(Dispatchers.Default) { redact(html, editUrl) })
+        return withContext(Dispatchers.Default) { ForumParser.postForm(html, editUrl, "") }
+    }
+
+    /** Slaat een bewerkt bericht op. Nieuwe foto's komen erbij; bestaande bijlagen blijven staan. */
+    suspend fun editPost(form: PostForm, subject: String, message: String, images: List<Image>) {
+        submit(form, subject.ifBlank { form.subject }, message, images, succeeded = ForumParser::editSucceeded)
+    }
+
+    /** Verwijdert een eigen bericht via de link "Verwijder" (bevat het beveiligingstoken van de site). */
+    suspend fun deletePost(deleteUrl: String) {
+        val html = getAsMember(deleteUrl)
+        debugDump?.invoke("verwijderd", withContext(Dispatchers.Default) { redact(html, deleteUrl) })
+        if (!ForumParser.isLoggedIn(html)) throw NotLoggedInException()
+        ForumParser.deleteError(html)?.let { throw ForumException(it) }
+    }
+
     /** Formulier voor een nieuw onderwerp, via de link "Nieuw onderwerp" van een categorie. */
     suspend fun newTopicForm(createUrl: String): PostForm {
         var html = get(createUrl)
@@ -348,7 +368,10 @@ class ForumRepository(
         return finalUrl.takeIf { Regex("/\\d+-[^/]+").containsMatchIn(it) && !it.contains("/create") }
     }
 
-    private suspend fun submit(form: PostForm, subject: String, message: String, images: List<Image>): String {
+    private suspend fun submit(
+        form: PostForm, subject: String, message: String, images: List<Image>,
+        succeeded: (String) -> Boolean = ForumParser::replySucceeded,
+    ): String {
         val text = buildString {
             append(message.trimEnd())
             images.forEachIndexed { i, img ->
@@ -364,7 +387,8 @@ class ForumRepository(
             }
         }.build()
         val (result, finalUrl) = postWithUrl(form.postUrl, body)
-        if (!ForumParser.replySucceeded(result)) {
+        debugDump?.invoke("na_versturen", withContext(Dispatchers.Default) { redact(result, finalUrl) })
+        if (!succeeded(result)) {
             throw ForumException(ForumParser.pageError(result) ?: "Bericht niet geplaatst")
         }
         return finalUrl

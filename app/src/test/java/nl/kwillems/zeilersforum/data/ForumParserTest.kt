@@ -174,4 +174,48 @@ class ForumParserTest {
         val doc = org.jsoup.Jsoup.parse(fixture("index.html"), ForumParser.BASE)
         assertEquals(null, ForumParser.myAvatar(doc))
     }
+
+    @Test fun editSucceeded() {
+        val ok = """<div id="system-message"><div class="alert alert-message"><div class="alert-message">Bericht succesvol bijgewerkt.</div></div></div>
+            <form id="kquickreply"><textarea name="message"></textarea></form>"""
+        assertTrue(ForumParser.editSucceeded(ok))
+        // Zonder melding, maar met alleen het snel-reageervak onder het onderwerp: ook gelukt.
+        assertTrue(ForumParser.editSucceeded("""<div class="kmsg-header"></div><form><textarea name="message"></textarea></form>"""))
+        // Het bewerkformulier opnieuw of een foutmelding: mislukt.
+        assertFalse(ForumParser.editSucceeded("""<form id="postform"><textarea name="message">x</textarea></form>"""))
+        assertFalse(ForumParser.editSucceeded("""<div class="alert alert-error">Geen toegang</div>"""))
+    }
+
+    @Test fun editAndDeleteLinks() {
+        val base = "/index.php/forum-hoofdmenu-37/clubhuis/1-test"
+        val html = """<div class="kmsg-header"><span class="kmsg-id-left"><a id="11">#11</a></span></div>
+            <table class="kmsg"><tr><td><div class="kmsgtext">Eigen</div>
+            <a class="kicon-button kbuttoncomm" href="$base/reply/11?quote=1"><span class="quote"><span>Quote</span></span></a>
+            <a class="kicon-button kbuttonmod" href="$base/edit/11"><span class="edit"><span>Bewerk</span></span></a>
+            <a class="kicon-button kbuttonmod" href="$base/11/task-delete/userid-5?abc=1"><span class="delete"><span>Verwijder</span></span></a>
+            </td></tr></table>
+            <div class="kmsg-header"><span class="kmsg-id-left"><a id="12">#12</a></span></div>
+            <table class="kmsg"><tr><td><div class="kmsgtext">Ander</div></td></tr></table>"""
+        val posts = ForumParser.parseTopic(html, ForumParser.BASE + base).posts
+        assertEquals(ForumParser.BASE + "$base/edit/11", posts[0].editUrl)
+        assertEquals(ForumParser.BASE + "$base/11/task-delete/userid-5?abc=1", posts[0].deleteUrl)
+        assertEquals(null, posts[1].editUrl)
+        assertEquals(null, posts[1].deleteUrl)
+    }
+
+    @Test fun editFormKeepsTextAndAttachments() {
+        val html = """<form id="postform" name="postform" action="/index.php/forum-hoofdmenu-37">
+            <input type="hidden" name="task" value="edit"><input type="hidden" name="mesid" value="11">
+            <input type="text" name="subject" value="Re: Test" disabled><input type="hidden" name="subject" value="Re: Test">
+            <textarea name="message">Regel 1
+Regel 2</textarea>
+            <input type="checkbox" name="attachments[7]" value="1" checked>
+            <input type="checkbox" name="subscribeMe" value="1"></form>"""
+        val form = ForumParser.postForm(html, ForumParser.BASE + "/x/edit/11", "")
+        assertEquals("Regel 1\nRegel 2", form.message)
+        assertFalse(form.subjectEditable)
+        assertEquals("1", form.fields["attachments[7]"])
+        assertEquals("edit", form.fields["task"])
+        assertFalse("subscribeMe" in form.fields)
+    }
 }
