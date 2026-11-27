@@ -20,21 +20,13 @@ data class Settings(
     val lastUpdateCheck: Long = 0,
     /** Hoe ver "Recente discussies" teruggaat (keuzelijst van de site). */
     val recentPeriod: RecentPeriod = RecentPeriod.SINCE_LAST_VISIT,
-    /** Bij openen van een onderwerp terug naar het bericht waar je was. */
-    val resumeMode: ResumeMode = ResumeMode.OLDEST_FIRST_ONLY,
-)
-
-/** Wanneer een onderwerp opent bij het bericht waar je was gebleven. */
-enum class ResumeMode(val label: String, val description: String) {
-    OLDEST_FIRST_ONLY("Alleen bij oud → nieuw", "Bij nieuw → oud begin je altijd bij het nieuwste bericht"),
-    ALWAYS("Bij beide volgordes", "Ook bij nieuw → oud kom je terug waar je was"),
-    OFF("Uit", "Altijd bij het begin of bij het nieuwste bericht"),
-    ;
-
-    fun appliesTo(order: PostOrder) = when (this) {
-        OLDEST_FIRST_ONLY -> order == PostOrder.OLDEST_FIRST
-        ALWAYS -> true
-        OFF -> false
+    /** Bij openen van een onderwerp terug naar het bericht waar je was, per volgorde. */
+    val resumeOldestFirst: Boolean = true,
+    val resumeNewestFirst: Boolean = false,
+) {
+    fun resumesFor(order: PostOrder) = when (order) {
+        PostOrder.OLDEST_FIRST -> resumeOldestFirst
+        PostOrder.NEWEST_FIRST -> resumeNewestFirst
     }
 }
 
@@ -69,7 +61,9 @@ class SettingsRepository(private val context: Context) {
             autoCheckUpdates = p[AUTO_UPDATE] ?: true,
             lastUpdateCheck = p[LAST_UPDATE_CHECK] ?: 0,
             recentPeriod = p[RECENT_PERIOD]?.let { runCatching { RecentPeriod.valueOf(it) }.getOrNull() } ?: RecentPeriod.SINCE_LAST_VISIT,
-            resumeMode = p[RESUME_MODE]?.let { runCatching { ResumeMode.valueOf(it) }.getOrNull() } ?: ResumeMode.OLDEST_FIRST_ONLY,
+            // Overgang van de eerdere keuzelijst (alleen in een testversie geweest).
+            resumeOldestFirst = p[RESUME_OLDEST] ?: (p[RESUME_MODE] != "OFF"),
+            resumeNewestFirst = p[RESUME_NEWEST] ?: (p[RESUME_MODE] == "ALWAYS"),
         )
     }
 
@@ -79,7 +73,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoCheckUpdates(v: Boolean) = context.dataStore.edit { it[AUTO_UPDATE] = v }
     suspend fun setLastUpdateCheck(v: Long) = context.dataStore.edit { it[LAST_UPDATE_CHECK] = v }
     suspend fun setRecentPeriod(v: RecentPeriod) = context.dataStore.edit { it[RECENT_PERIOD] = v.name }
-    suspend fun setResumeMode(v: ResumeMode) = context.dataStore.edit { it[RESUME_MODE] = v.name }
+    suspend fun setResumeOldestFirst(v: Boolean) = context.dataStore.edit { it[RESUME_OLDEST] = v }
+    suspend fun setResumeNewestFirst(v: Boolean) = context.dataStore.edit { it[RESUME_NEWEST] = v }
     suspend fun setImageMode(v: ImageMode) = context.dataStore.edit { it[IMAGE_MODE] = v.name; it.remove(IMAGES) }
 
 
@@ -93,5 +88,7 @@ class SettingsRepository(private val context: Context) {
         val LAST_UPDATE_CHECK = androidx.datastore.preferences.core.longPreferencesKey("last_update_check")
         val RECENT_PERIOD = stringPreferencesKey("recent_period")
         val RESUME_MODE = stringPreferencesKey("resume_mode")
+        val RESUME_OLDEST = booleanPreferencesKey("resume_oldest_first")
+        val RESUME_NEWEST = booleanPreferencesKey("resume_newest_first")
     }
 }

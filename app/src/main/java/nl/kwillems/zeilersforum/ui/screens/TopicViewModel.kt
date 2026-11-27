@@ -102,8 +102,8 @@ class TopicViewModel(
                 val first = firstLoad
                 firstLoad = false
                 // Bij de eerste keer openen (gewone link): verder waar je was gebleven, als dat is ingesteld.
-                val mode = app.settings.settings.first().resumeMode
-                val resume = if (first && mode.appliesTo(order) && linkStart == 0 && anchor == null)
+                val wanted = app.settings.settings.first().resumesFor(order)
+                val resume = if (first && wanted && linkStart == 0 && anchor == null)
                     app.readingPositions.get(topicId) else null
                 load(
                     order,

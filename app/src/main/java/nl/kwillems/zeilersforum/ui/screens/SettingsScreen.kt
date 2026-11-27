@@ -53,7 +53,6 @@ import nl.kwillems.zeilersforum.BuildConfig
 import nl.kwillems.zeilersforum.ZfApp
 import nl.kwillems.zeilersforum.data.PostOrder
 import nl.kwillems.zeilersforum.data.RecentPeriod
-import nl.kwillems.zeilersforum.data.ResumeMode
 import nl.kwillems.zeilersforum.data.Settings
 import nl.kwillems.zeilersforum.data.ThemeMode
 import nl.kwillems.zeilersforum.ui.AppIcon
@@ -66,7 +65,6 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     val scope = rememberCoroutineScope()
     var debugResult by remember { mutableStateOf<String?>(null) }
     var choosePeriod by remember { mutableStateOf(false) }
-    var chooseResume by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var appIcon by remember { mutableStateOf(AppIcon.current(ctx)) }
 
@@ -89,28 +87,6 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = { choosePeriod = false }) { Text("Sluiten") } },
-    )
-
-    if (chooseResume) AlertDialog(
-        onDismissRequest = { chooseResume = false },
-        title = { Text("Verder waar je was gebleven") },
-        text = {
-            Column {
-                ResumeMode.entries.forEach { m ->
-                    ListItem(
-                        headlineContent = { Text(m.label) },
-                        supportingContent = { Text(m.description) },
-                        leadingContent = { RadioButton(selected = s.resumeMode == m, onClick = null) },
-                        colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
-                        modifier = Modifier.selectable(selected = s.resumeMode == m, role = Role.RadioButton, onClick = {
-                            scope.launch { app.settings.setResumeMode(m) }
-                            chooseResume = false
-                        }),
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { chooseResume = false }) { Text("Sluiten") } },
     )
 
     Scaffold(topBar = {
@@ -144,12 +120,19 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             Choice("Nieuw → oud", "Begin bij het nieuwste bericht", s.postOrder == PostOrder.NEWEST_FIRST) {
                 scope.launch { app.settings.setPostOrder(PostOrder.NEWEST_FIRST) }
             }
-            ListItem(
-                headlineContent = { Text("Verder waar je was gebleven") },
-                supportingContent = { Text(s.resumeMode.label) },
-                trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
-                modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = { chooseResume = true }),
+            Text(
+                "Verder waar je was gebleven",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
+            Text(
+                "Een onderwerp opent weer bij het bericht waar je was. Zonder vinkje begin je bij het oudste of bij het nieuwste bericht.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            CheckRow("Bij oud → nieuw", s.resumeOldestFirst) { scope.launch { app.settings.setResumeOldestFirst(it) } }
+            CheckRow("Bij nieuw → oud", s.resumeNewestFirst) { scope.launch { app.settings.setResumeNewestFirst(it) } }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Section("Foto's in berichten")
@@ -310,4 +293,13 @@ private fun IconChoice(icon: AppIcon, selected: Boolean, onClick: () -> Unit) {
             modifier = Modifier.padding(top = 4.dp),
         )
     }
+}
+
+@Composable
+private fun CheckRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        leadingContent = { androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = null) },
+        modifier = Modifier.selectable(selected = checked, onClick = { onChange(!checked) }, role = Role.Checkbox),
+    )
 }
