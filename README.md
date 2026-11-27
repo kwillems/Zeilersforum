@@ -14,8 +14,8 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - Foto's in berichten: altijd laden, alleen via wifi, of pas na een tik op "Foto bekijken"
 - Instelbaar app-icoon (twaalf varianten met de twee zeilen) via Instellingen → App-icoon
 - Inloggen (wachtwoord versleuteld met de Android Keystore), automatisch opnieuw inloggen
-- Reageren en citeren, met foto's als bijlage (worden verkleind tot max. 1024 px, net als op het forum zelf)
-- Eigen berichten bewerken en verwijderen, zolang de site dat toestaat
+- Reageren en citeren, met bijlagen: foto's (verkleind tot max. 1024 px, net als op het forum zelf) en bestanden van de typen die het forum toestaat (pdf, gpx, docx, xlsx, zip en meer; max. 6 per bericht)
+- Eigen berichten bewerken en verwijderen, zolang de site dat toestaat; bij bewerken kun je ook bijlagen weghalen of toevoegen
 - Forumlinks openen in de app
 - Updates: controleert (desgewenst dagelijks) de releases op GitHub, downloadt de nieuwe APK, controleert controlesom en sleutel en start de installatie
 
