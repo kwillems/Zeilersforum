@@ -17,7 +17,11 @@ enum class AppIcon(val alias: String, val label: String, val icon: Int) {
     B("IconB", "Diepzee", R.mipmap.ic_app_b),
     C("IconC", "Avond", R.mipmap.ic_app_c),
     D("IconD", "Zee", R.mipmap.ic_app_d),
-    F("IconF", "Zeegroen", R.mipmap.ic_app_f);
+    F("IconF", "Zeegroen", R.mipmap.ic_app_f),
+    N("IconN", "Nacht", R.mipmap.ic_app_n),
+    R_("IconR", "Rood", R.mipmap.ic_app_r),
+    O("IconO", "Oranje", R.mipmap.ic_app_o),
+    M("IconM", "Mist", R.mipmap.ic_app_m);
 
     companion object {
         /** Staat in het manifest aan. */

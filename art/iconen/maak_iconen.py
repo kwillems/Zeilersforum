@@ -41,6 +41,13 @@ def grad(top, bottom, y1=0, y2=108):
     return ("grad", top, bottom, y1, y2)
 
 
+def circle(cx, cy, r):
+    return f"M{cx - r},{cy} A{r},{r} 0 1 0 {cx + r},{cy} A{r},{r} 0 1 0 {cx - r},{cy} Z"
+
+
+NIGHT = grad("#1B2A4A", "#0A1224")
+STARS = [(70, 24, 1.1), (82, 36, 0.8), (60, 33, 0.7), (88, 22, 0.9), (24, 58, 0.7)]
+
 # sleutel: naam, achtergrondlagen, ballon (None of lagen binnen de ballon), zeilen (schaal, dx, dy)
 VARIANTS = {
     "a": ("Klassiek", [(FULL, grad("#78A8D8", "#3A6BA3"), 1)], None, (0.58, 0, 0)),
@@ -53,6 +60,11 @@ VARIANTS = {
     "ab": ("Ballon licht", [(FULL, LIGHT_BG, 1)], [(BUBBLE, grad("#78A8D8", "#3A6BA3", 28, 85), 1)], (0.42, 1, -2)),
     "db": ("Ballon zee", [(FULL, LIGHT_BG, 1)],
            [(FULL, "#8EC0EC", 1), (wave_small(60), "#1E5D9C", 1)], (0.42, 1, -2)),
+    "n": ("Nacht", [(FULL, NIGHT, 1), (circle(36, 36, 9), "#F4E9C8", 1), (circle(40.5, 32.5, 8), NIGHT, 1)]
+          + [(circle(x, y, r), "#FFFFFF", 0.85) for x, y, r in STARS], None, (0.56, 4, 2)),
+    "r": ("Rood", [(FULL, grad("#E0393E", "#A3121A"), 1)], None, (0.58, 0, 0)),
+    "o": ("Oranje", [(FULL, grad("#FF9A3C", "#E2610C"), 1)], None, (0.58, 0, 0)),
+    "m": ("Mist", [(FULL, grad("#8A9BB0", "#4E5F75"), 1)], None, (0.58, 0, 0)),
 }
 # Ballonnen iets kleiner, zodat de punt ook in een rond icoon past.
 BALLOON_SCALE = 0.95
