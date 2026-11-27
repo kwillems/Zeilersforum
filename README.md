@@ -22,6 +22,26 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - Forumlinks openen in de app
 - Updates: controleert (desgewenst dagelijks) de releases op GitHub, downloadt de nieuwe APK, controleert controlesom en sleutel en start de installatie
 
+## Installeren
+De app staat niet in de Play Store. Je installeert hem één keer zelf; daarna werkt hij zichzelf bij.
+
+### De eerste keer
+1. Open op je Android-toestel in Chrome de [nieuwste release](https://github.com/kwillems/Zeilersforum/releases/latest) en tik op het bestand `zeilersforum-x.y.z.apk`. Het komt in **Downloads**.
+2. Tik op de melding van de download (of open het bestand in Downloads).
+3. Android meldt dat Chrome geen onbekende apps mag installeren. Tik op **Instellingen**, zet **Toestaan van deze bron** aan en ga terug.
+4. Tik op **Installeren**. Android controleert de app (Play Protect) en installeert hem.
+5. Tik op **Openen**.
+
+Je kunt daarna `zeilersforum-x.y.z.apk` uit Downloads verwijderen, en Chrome de toestemming weer afnemen via **Instellingen → Apps → Speciale app-toegang → Onbekende apps installeren**.
+
+Heb je nog de oude app (2.x)? Die heeft een andere pakketnaam, blijft gewoon naast de nieuwe staan en kun je zelf verwijderen.
+
+### Daarna: bijwerken vanuit de app
+1. Eens per dag kijkt de app bij het openen of er een nieuwe versie is (uit te zetten bij **Instellingen → Updates**; daar kun je ook zelf controleren). Is die er, dan staat bovenaan **Nieuwe versie x.y.z**. Tik erop.
+2. Tik op **Downloaden**. De app downloadt de nieuwe versie en controleert de controlesom en of hij met dezelfde sleutel is ondertekend.
+3. *Alleen de eerste keer:* tik op **Toestemming geven**, zet **Toestaan van deze bron** aan voor Zeilersforum en ga terug.
+4. Tik op **Installeren** en bevestig bij Android met **Updaten**. De app sluit, wordt bijgewerkt en je tikt op **Openen**. Instellingen en inlog blijven bewaard.
+
 ## Bouwen
 Vereist: JDK 21 en de Android SDK (platform `android-37.2`).
 
