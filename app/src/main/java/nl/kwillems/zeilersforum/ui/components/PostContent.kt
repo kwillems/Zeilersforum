@@ -6,16 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
@@ -37,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -86,15 +84,17 @@ fun HtmlText(html: String, modifier: Modifier = Modifier, maxLines: Int = Int.MA
 
 @Composable
 private fun QuoteBox(blocks: List<Block>, loadImages: Boolean, onImageClick: (String) -> Unit) {
-    Row(
+    // De streep links wordt getekend in plaats van gemeten: IntrinsicSize kan niet met foto's
+    // (SubcomposeAsyncImage) in het citaat en liet de app dan crashen.
+    val bar = MaterialTheme.colorScheme.primary
+    Box(
         Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .drawBehind { drawRect(bar, size = Size(4.dp.toPx(), size.height)) },
     ) {
-        Box(Modifier.width(4.dp).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
-        PostContent(blocks, loadImages, onImageClick, Modifier.padding(12.dp))
+        PostContent(blocks, loadImages, onImageClick, Modifier.padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp))
     }
 }
 
