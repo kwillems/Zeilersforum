@@ -150,17 +150,14 @@ class ForumRepository(
     /** Een lijst met onderwerpen: recent, een categorie of "mijn onderwerpen". */
     suspend fun topicList(baseUrl: String, page: Int, perPage: Int, needsLogin: Boolean = false): TopicsPage {
         val url = if (page <= 1) baseUrl else baseUrl + (if ('?' in baseUrl) "&" else "?") + "start=${(page - 1) * perPage}"
-        var html = get(url)
-        if (needsLogin && !ForumParser.isLoggedIn(html)) {
-            if (!tryAutoLogin()) throw NotLoggedInException()
-            html = get(url)
-        }
+        val html = getAsMember(url)
+        if (needsLogin && !ForumParser.isLoggedIn(html)) throw NotLoggedInException()
         track(html)
         return withContext(Dispatchers.Default) { ForumParser.parseTopics(html, url) }
     }
 
     suspend fun forumIndex(): List<Section> {
-        val html = get(INDEX_URL)
+        val html = getAsMember(INDEX_URL)
         track(html)
         return withContext(Dispatchers.Default) { ForumParser.parseIndex(html, INDEX_URL) }
     }
@@ -176,7 +173,7 @@ class ForumRepository(
             .addQueryParameter("limit", "25")
             .apply { if (page > 1) addQueryParameter("start", ((page - 1) * 25).toString()) }
             .build().toString()
-        val html = get(url)
+        val html = getAsMember(url)
         return withContext(Dispatchers.Default) { ForumParser.parseSearch(html, url) }
     }
 
@@ -185,12 +182,8 @@ class ForumRepository(
      * als er gegevens zijn opgeslagen maar de sessie verlopen is.
      */
     suspend fun topicPage(url: String): TopicPage {
-        var html = get(url)
-        var page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
-        if (!page.loggedIn && credentials.load() != null && tryAutoLogin()) {
-            html = get(url)
-            page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
-        }
+        val html = getAsMember(url)
+        val page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
         track(html)
         debugDump?.invoke(if (page.loggedIn) "topic_ingelogd" else "topic_gast", html)
         return page
@@ -226,9 +219,34 @@ class ForumRepository(
         if (_avatar.value == null) lookupAvatar(username.trim())
     }
 
+    /**
+     * GET als lid: is de sessie verlopen terwijl er inloggegevens zijn opgeslagen, dan eerst
+     * opnieuw inloggen. Anders mist de pagina alles wat alleen voor leden is (zoals het Clubhuis).
+     */
+    private suspend fun getAsMember(url: String): String {
+        val html = get(url)
+        if (ForumParser.isLoggedIn(html) || credentials.load() == null) return html
+        return if (tryAutoLogin()) get(url) else html
+    }
+
+    private val autoLoginMutex = Mutex()
+    private var lastAutoLogin = 0L
+    private var lastAutoLoginFailure = 0L
+
+    /**
+     * Opnieuw inloggen; laden er meerdere schermen tegelijk, dan logt er maar één in.
+     * Na een mislukte poging (wachtwoord gewijzigd, geen verbinding) wordt het even niet opnieuw geprobeerd.
+     */
     private suspend fun tryAutoLogin(): Boolean {
         val c = credentials.load() ?: return false
-        return runCatching { login(c.username, c.password) }.isSuccess
+        val asked = System.currentTimeMillis()
+        return autoLoginMutex.withLock {
+            if (lastAutoLogin >= asked) return@withLock true
+            if (asked - lastAutoLoginFailure < 2 * 60_000) return@withLock false
+            runCatching { login(c.username, c.password) }.isSuccess.also {
+                if (it) lastAutoLogin = System.currentTimeMillis() else lastAutoLoginFailure = System.currentTimeMillis()
+            }
+        }
     }
 
     fun logout() {
