@@ -40,7 +40,20 @@ data class TopicState(
     /** Forum (categorie) van het onderwerp. */
     val forumName: String = "",
     val forumUrl: String? = null,
-)
+    /** Bericht waar de lijst naartoe moet scrollen ([SCROLL_TOP] = bovenaan); daarna weer null. */
+    val scrollTo: String? = null,
+    /** Net teruggekeerd naar de opgeslagen leespositie: toon de melding met "Naar het begin". */
+    val resumed: Boolean = false,
+    val loadingPrevious: Boolean = false,
+) {
+    /** Laagste geladen pagina; bij oud → nieuw kunnen de pagina's daarvoor nog worden geladen. */
+    val firstLoadedPage: Int get() = loadedPages.minOrNull() ?: 1
+    val hasEarlier: Boolean get() = order == PostOrder.OLDEST_FIRST && firstLoadedPage > 1
+
+    companion object {
+        const val SCROLL_TOP = "#top"
+    }
+}
 
 /**
  * Laadt een onderwerp pagina voor pagina. Bij "nieuw → oud" wordt eerst de laatste
@@ -55,6 +68,14 @@ class TopicViewModel(
 
     private val baseUrl = ForumParser.baseTopicUrl(url)
     private val linkStart = ForumParser.startOf(url)
+    private val topicId = ForumParser.topicId(url)
+    /** Berichtnummer uit de link (#1710580), om daar naartoe te springen. */
+    private val anchor = url.substringAfter('#', "").takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+    /** Op welke pagina elk geladen bericht staat, voor het onthouden van de leespositie. */
+    private val postPage = mutableMapOf<String, Int>()
+    private var firstLoad = true
+    /** Bericht dat nu bovenaan het scherm staat (ook als het niet wordt opgeslagen). */
+    private var topPost: String? = null
     private var perPage = 25
     private var job: Job? = null
 
@@ -67,7 +88,18 @@ class TopicViewModel(
         viewModelScope.launch {
             app.settings.settings.map { it.postOrder }.distinctUntilChanged().collect { order ->
                 _state.update { it.copy(order = order) }
-                load(order, initial = _state.value.posts.isEmpty())
+                val first = firstLoad
+                firstLoad = false
+                // Bij de eerste keer openen (oud → nieuw, gewone link): verder waar je was gebleven.
+                val resume = if (first && order == PostOrder.OLDEST_FIRST && linkStart == 0 && anchor == null)
+                    app.readingPositions.get(topicId) else null
+                load(
+                    order,
+                    initial = _state.value.posts.isEmpty(),
+                    startPage = resume?.page,
+                    scrollTo = resume?.postId ?: anchor.takeIf { first },
+                    resuming = resume != null,
+                )
             }
         }
     }
@@ -92,8 +124,17 @@ class TopicViewModel(
         }
     }
 
-    /** Laadt vanaf het begin in de gekozen volgorde. [startPage] = specifieke pagina. */
-    fun load(order: PostOrder = _state.value.order, initial: Boolean = false, startPage: Int? = null) {
+    /**
+     * Laadt vanaf het begin in de gekozen volgorde. [startPage] = specifieke pagina,
+     * [scrollTo] = bericht (of [TopicState.SCROLL_TOP]) om na het laden naartoe te scrollen.
+     */
+    fun load(
+        order: PostOrder = _state.value.order,
+        initial: Boolean = false,
+        startPage: Int? = null,
+        scrollTo: String? = null,
+        resuming: Boolean = false,
+    ) {
         job?.cancel()
         job = viewModelScope.launch {
             _state.update { it.copy(loading = initial, refreshing = !initial, error = null) }
@@ -117,7 +158,11 @@ class TopicViewModel(
                 first
             }.onSuccess { page ->
                 apply(page)
+                remember(page)
                 val next = if (order == PostOrder.NEWEST_FIRST) page.page - 1 else page.page + 1
+                val target = scrollTo?.takeIf { t -> t == TopicState.SCROLL_TOP || page.posts.any { p -> p.id == t } }
+                // Melding alleen als er echt iets te zien was verderop (niet bij het eerste bericht).
+                val showResumed = resuming && (page.page > 1 || (target != null && page.posts.firstOrNull()?.id != target))
                 _state.update {
                     it.copy(
                         posts = ordered(page, order),
@@ -125,6 +170,8 @@ class TopicViewModel(
                         nextPage = next.takeIf { n -> n in 1..page.totalPages },
                         loading = false,
                         refreshing = false,
+                        scrollTo = target ?: if (startPage != null) TopicState.SCROLL_TOP else null,
+                        resumed = showResumed,
                     )
                 }
             }.onFailure { e ->
@@ -143,6 +190,7 @@ class TopicViewModel(
             runCatching { app.forum.topicPage(pageUrl(next)) }
                 .onSuccess { page ->
                     apply(page)
+                    remember(page)
                     val order = _state.value.order
                     val known = _state.value.posts.map { it.id }.toSet()
                     val after = if (order == PostOrder.NEWEST_FIRST) page.page - 1 else page.page + 1
@@ -162,9 +210,65 @@ class TopicViewModel(
         }
     }
 
-    fun refresh() = load(_state.value.order, initial = false)
+    private fun remember(page: TopicPage) = page.posts.forEach { postPage[it.id] = page.page }
 
-    fun goToPage(page: Int) = load(_state.value.order, initial = true, startPage = page)
+    /** Laadt bij oud → nieuw de pagina vóór de eerste geladen pagina en zet die bovenaan. */
+    fun loadPrevious() {
+        val s = _state.value
+        if (!s.hasEarlier || s.loading || s.loadingPrevious || s.refreshing) return
+        val prev = s.firstLoadedPage - 1
+        viewModelScope.launch {
+            _state.update { it.copy(loadingPrevious = true) }
+            runCatching { app.forum.topicPage(pageUrl(prev)) }
+                .onSuccess { page ->
+                    apply(page)
+                    remember(page)
+                    _state.update {
+                        val known = it.posts.map { p -> p.id }.toSet()
+                        it.copy(
+                            posts = page.posts.filter { p -> p.id !in known } + it.posts,
+                            loadedPages = it.loadedPages + page.page,
+                            loadingPrevious = false,
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _state.update { it.copy(loadingPrevious = false, error = e.friendly()) }
+                }
+        }
+    }
+
+    /** Het bericht bovenaan het scherm; wordt onthouden als leespositie van dit onderwerp. */
+    fun setTopPost(postId: String) { topPost = postId }
+
+    fun rememberPosition(postId: String) {
+        topPost = postId
+        val s = _state.value
+        if (s.loading || s.refreshing || s.scrollTo != null) return
+        val page = postPage[postId] ?: return
+        app.readingPositions.save(topicId, page, postId)
+    }
+
+    fun clearScroll() = _state.update { it.copy(scrollTo = null) }
+    fun clearResumed() = _state.update { it.copy(resumed = false) }
+
+    /** "Naar het begin": eerste pagina, bovenaan. */
+    fun toBeginning() = load(_state.value.order, initial = true, startPage = 1, scrollTo = TopicState.SCROLL_TOP)
+
+    /**
+     * Opnieuw laden. Bij oud → nieuw vanaf de pagina waar je bent, en je blijft bij hetzelfde bericht;
+     * anders zou je na vernieuwen weer op pagina 1 staan.
+     */
+    fun refresh() {
+        val s = _state.value
+        val top = topPost?.takeIf { id -> s.posts.any { it.id == id } }
+        if (s.order == PostOrder.OLDEST_FIRST && top != null) {
+            load(s.order, initial = false, startPage = postPage[top] ?: s.firstLoadedPage, scrollTo = top)
+        } else load(s.order, initial = false)
+    }
+
+    fun goToPage(page: Int) = load(_state.value.order, initial = true, startPage = page, scrollTo = TopicState.SCROLL_TOP)
 
     fun toggleOrder() {
         viewModelScope.launch {

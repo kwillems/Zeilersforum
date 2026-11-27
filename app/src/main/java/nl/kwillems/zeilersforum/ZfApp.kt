@@ -25,6 +25,8 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var updates: nl.kwillems.zeilersforum.data.UpdateManager
         private set
+    lateinit var readingPositions: nl.kwillems.zeilersforum.data.ReadingPositions
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -37,6 +39,7 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
             .build()
         forum = ForumRepository(client, cookies, CredentialStore(this), getSharedPreferences("profile", MODE_PRIVATE))
         settings = SettingsRepository(this)
+        readingPositions = nl.kwillems.zeilersforum.data.ReadingPositions(getSharedPreferences("reading", MODE_PRIVATE))
         updates = nl.kwillems.zeilersforum.data.UpdateManager(this, client, settings)
         if (BuildConfig.DEBUG) {
             // Alleen de testversie: laatst opgehaalde onderwerppagina bewaren (app-privé map).

@@ -90,6 +90,13 @@ import nl.kwillems.zeilersforum.ui.components.ReadersCard
 import nl.kwillems.zeilersforum.ui.components.ShowPhotoButton
 import nl.kwillems.zeilersforum.ui.components.autoLoadImages
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,6 +129,47 @@ fun TopicScreen(
             vm.refresh()
             onRefreshHandled()
             if (state.order == PostOrder.NEWEST_FIRST) listState.scrollToItem(0)
+        }
+    }
+    // Naar een bericht scrollen (opgeslagen leespositie, link met #bericht of na "Naar pagina").
+    LaunchedEffect(state.scrollTo, state.posts) {
+        val target = state.scrollTo ?: return@LaunchedEffect
+        if (state.posts.isEmpty()) return@LaunchedEffect
+        val offset = (if (state.readers.isNotEmpty()) 1 else 0) + (if (state.hasEarlier) 1 else 0)
+        if (target == TopicState.SCROLL_TOP) listState.scrollToItem(0)
+        else state.posts.indexOfFirst { it.id == target }.takeIf { it >= 0 }?.let { listState.scrollToItem(offset + it) }
+        vm.clearScroll()
+    }
+    LaunchedEffect(state.resumed) {
+        if (state.resumed) {
+            vm.clearResumed()
+            // In een eigen coroutine: het wissen van de vlag start dit effect opnieuw, de melding moet blijven.
+            scope.launch {
+                val r = snackbar.showSnackbar(
+                    "Verder waar je was gebleven", actionLabel = "Naar het begin", withDismissAction = true,
+                    duration = SnackbarDuration.Long,
+                )
+                if (r == SnackbarResult.ActionPerformed) vm.toBeginning()
+            }
+        }
+    }
+    // Het bericht bovenaan het scherm onthouden (na even stilstaan, niet bij elke pixel).
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            // Het bovenste bericht in beeld; is daarvan al meer dan de helft voorbij, dan het volgende.
+            val info = listState.layoutInfo.visibleItemsInfo
+            val first = info.firstOrNull { it.index == listState.firstVisibleItemIndex }
+            val pick = if (first != null && listState.firstVisibleItemScrollOffset > first.size / 2)
+                info.firstOrNull { it.index == first.index + 1 } ?: first else first
+            fun isPost(k: Any?) = (k as? String)?.let { it != "readers" && it != "earlier" } == true
+            // Staat de knop "Eerdere berichten" of "Wie leest er mee?" bovenaan, dan het eerste bericht daaronder.
+            (if (isPost(pick?.key)) pick else info.firstOrNull { isPost(it.key) })?.key as String?
+        }.distinctUntilChanged().collectLatest { id ->
+            if (id != null) {
+                vm.setTopPost(id)
+                delay(800)
+                vm.rememberPosition(id)
+            }
         }
     }
     LaunchedEffect(state.notice) {
@@ -247,6 +295,15 @@ fun TopicScreen(
                 ) {
                     if (state.readers.isNotEmpty()) item(key = "readers") {
                         ReadersCard(state.readers, Modifier.widthIn(max = 960.dp).fillMaxWidth())
+                    }
+                    if (state.hasEarlier) item(key = "earlier") {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            if (state.loadingPrevious) CircularProgressIndicator(Modifier.padding(8.dp).size(28.dp))
+                            else FilledTonalButton(onClick = vm::loadPrevious) {
+                                Icon(Icons.Filled.KeyboardArrowUp, null)
+                                Text("Eerdere berichten (pagina ${state.firstLoadedPage - 1})", Modifier.padding(start = 6.dp))
+                            }
+                        }
                     }
                     items(state.posts, key = { it.id.ifBlank { it.hashCode().toString() } }) { post ->
                         PostCard(
