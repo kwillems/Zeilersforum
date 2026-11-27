@@ -165,9 +165,9 @@ class ReplyViewModel(
 
     companion object {
         const val MAX_PHOTOS = 6
-        private const val MAX_SIDE = 1920
+        private const val MAX_SIDE = 1024
 
-        /** Verkleint de foto tot max. 1920 px, draait hem rechtop en maakt er een JPEG van. */
+        /** Verkleint de foto tot max. 1024 px (het forum verkleint zelf ook tot 1024), draait hem rechtop en maakt er een JPEG van. */
         fun compress(context: Context, uri: Uri): ByteArray {
             val cr = context.contentResolver
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
