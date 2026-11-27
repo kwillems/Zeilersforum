@@ -6,16 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.alpha
-import nl.kwillems.zeilersforum.data.DEFAULT_SIGNATURE
 import nl.kwillems.zeilersforum.data.ImageMode
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -68,7 +63,6 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     val s by app.settings.settings.collectAsStateWithLifecycle(initialValue = Settings())
     val user by app.forum.username.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var editSignature by remember { mutableStateOf(false) }
     var debugResult by remember { mutableStateOf<String?>(null) }
     var choosePeriod by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -94,41 +88,6 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = { choosePeriod = false }) { Text("Sluiten") } },
     )
-
-    if (editSignature) {
-        var text by remember { mutableStateOf(s.signatureText) }
-        AlertDialog(
-            onDismissRequest = { editSignature = false },
-            title = { Text("Ondertekening") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { text = it.replace("\n", " ") },
-                        label = { Text("Tekst") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        "Wordt klein en grijs onder je reactie gezet.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(
-                        onClick = { text = DEFAULT_SIGNATURE },
-                        enabled = text != DEFAULT_SIGNATURE,
-                    ) { Text("Standaardtekst herstellen") }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch { app.settings.setSignatureText(text) }
-                    editSignature = false
-                }) { Text("Opslaan") }
-            },
-            dismissButton = { TextButton(onClick = { editSignature = false }) { Text("Annuleren") } },
-        )
-    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -173,20 +132,6 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             Choice("Knop \"Foto bekijken\"", "Foto's pas laden als je erop tikt; bespaart data", s.imageMode == ImageMode.ON_TAP) {
                 scope.launch { app.settings.setImageMode(ImageMode.ON_TAP) }
             }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("Reageren")
-            Toggle("Ondertekening toevoegen", "Een regel onder elke reactie die je met de app plaatst", s.appSignature) {
-                scope.launch { app.settings.setAppSignature(it) }
-            }
-            ListItem(
-                headlineContent = { Text("Tekst van de ondertekening") },
-                supportingContent = { Text("\"${s.signatureText}\"") },
-                leadingContent = { Icon(Icons.Filled.Edit, null) },
-                modifier = Modifier
-                    .selectable(selected = false, enabled = s.appSignature, onClick = { editSignature = true }, role = Role.Button)
-                    .alpha(if (s.appSignature) 1f else 0.5f),
-            )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Section("App-icoon")

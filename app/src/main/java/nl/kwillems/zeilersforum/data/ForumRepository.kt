@@ -310,8 +310,8 @@ class ForumRepository(
      * en worden in de tekst opgenomen met [attachment:n]naam[/attachment],
      * net als in de oorspronkelijke app.
      */
-    suspend fun postReply(form: ReplyForm, message: String, images: List<Image>, signature: String?) {
-        submit(form, form.subject, message, images, signature)
+    suspend fun postReply(form: ReplyForm, message: String, images: List<Image>) {
+        submit(form, form.subject, message, images)
     }
 
     /** Formulier voor een nieuw onderwerp, via de link "Nieuw onderwerp" van een categorie. */
@@ -325,18 +325,17 @@ class ForumRepository(
     }
 
     /** Start een nieuw onderwerp; geeft de URL van het nieuwe onderwerp terug (als bekend). */
-    suspend fun createTopic(form: PostForm, subject: String, message: String, images: List<Image>, signature: String?): String? {
-        val finalUrl = submit(form, subject.trim(), message, images, signature)
+    suspend fun createTopic(form: PostForm, subject: String, message: String, images: List<Image>): String? {
+        val finalUrl = submit(form, subject.trim(), message, images)
         return finalUrl.takeIf { Regex("/\\d+-[^/]+").containsMatchIn(it) && !it.contains("/create") }
     }
 
-    private suspend fun submit(form: PostForm, subject: String, message: String, images: List<Image>, signature: String?): String {
+    private suspend fun submit(form: PostForm, subject: String, message: String, images: List<Image>): String {
         val text = buildString {
             append(message.trimEnd())
             images.forEachIndexed { i, img ->
                 append("\n\n[attachment:${i + 1}]${img.fileName}[/attachment]")
             }
-            if (!signature.isNullOrBlank()) append("\n\n[size=2][i][color=#878787]${signature.trim()}[/color][/i][/size]")
         }
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             form.fields.forEach { (k, v) -> if (k != "subject" && k != "message") addFormDataPart(k, v) }

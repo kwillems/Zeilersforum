@@ -12,7 +12,6 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - "Wie leest er mee?" bovenaan een onderwerp (als je bent ingelogd)
 - Privéberichten (uddeIM): postvak in, verzonden, lezen, beantwoorden, nieuw bericht en verwijderen, met teller voor ongelezen berichten
 - Foto's in berichten: altijd laden, alleen via wifi, of pas na een tik op "Foto bekijken"
-- Instelbare ondertekening onder reacties
 - Instelbaar app-icoon (twaalf varianten met de twee zeilen) via Instellingen → App-icoon
 - Inloggen (wachtwoord versleuteld met de Android Keystore), automatisch opnieuw inloggen
 - Reageren en citeren, met foto's als bijlage (worden verkleind tot max. 1920 px)

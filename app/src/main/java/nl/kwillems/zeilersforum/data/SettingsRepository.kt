@@ -14,8 +14,6 @@ data class Settings(
     val postOrder: PostOrder = PostOrder.OLDEST_FIRST,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
-    val appSignature: Boolean = true,
-    val signatureText: String = DEFAULT_SIGNATURE,
     val imageMode: ImageMode = ImageMode.ALWAYS,
     /** Eens per dag bij het openen kijken of er een nieuwe versie op GitHub staat. */
     val autoCheckUpdates: Boolean = true,
@@ -41,7 +39,6 @@ enum class RecentPeriod(val sel: Int, val label: String) {
 /** Wanneer foto's in berichten automatisch worden geladen. */
 enum class ImageMode { ALWAYS, WIFI_ONLY, ON_TAP }
 
-const val DEFAULT_SIGNATURE = "Gepost met de vernieuwde Zeilersforum-app"
 
 class SettingsRepository(private val context: Context) {
 
@@ -50,8 +47,6 @@ class SettingsRepository(private val context: Context) {
             postOrder = p[ORDER]?.let { runCatching { PostOrder.valueOf(it) }.getOrNull() } ?: PostOrder.OLDEST_FIRST,
             themeMode = p[THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
             dynamicColor = p[DYNAMIC] ?: true,
-            appSignature = p[SIGNATURE] ?: true,
-            signatureText = p[SIGNATURE_TEXT]?.takeIf { it.isNotBlank() } ?: DEFAULT_SIGNATURE,
             imageMode = p[IMAGE_MODE]?.let { runCatching { ImageMode.valueOf(it) }.getOrNull() }
                 // Overgang van de oude aan/uit-schakelaar.
                 ?: if (p[IMAGES] == false) ImageMode.ON_TAP else ImageMode.ALWAYS,
@@ -64,27 +59,20 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPostOrder(v: PostOrder) = context.dataStore.edit { it[ORDER] = v.name }
     suspend fun setThemeMode(v: ThemeMode) = context.dataStore.edit { it[THEME] = v.name }
     suspend fun setDynamicColor(v: Boolean) = context.dataStore.edit { it[DYNAMIC] = v }
-    suspend fun setAppSignature(v: Boolean) = context.dataStore.edit { it[SIGNATURE] = v }
     suspend fun setAutoCheckUpdates(v: Boolean) = context.dataStore.edit { it[AUTO_UPDATE] = v }
     suspend fun setLastUpdateCheck(v: Long) = context.dataStore.edit { it[LAST_UPDATE_CHECK] = v }
     suspend fun setRecentPeriod(v: RecentPeriod) = context.dataStore.edit { it[RECENT_PERIOD] = v.name }
     suspend fun setImageMode(v: ImageMode) = context.dataStore.edit { it[IMAGE_MODE] = v.name; it.remove(IMAGES) }
 
-    /** Lege tekst = terug naar de standaardondertekening. */
-    suspend fun setSignatureText(v: String) = context.dataStore.edit {
-        if (v.isBlank() || v.trim() == DEFAULT_SIGNATURE) it.remove(SIGNATURE_TEXT) else it[SIGNATURE_TEXT] = v.trim()
-    }
 
     private companion object {
         val ORDER = stringPreferencesKey("post_order")
         val THEME = stringPreferencesKey("theme_mode")
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
-        val SIGNATURE = booleanPreferencesKey("app_signature")
         val IMAGES = booleanPreferencesKey("load_images")
         val IMAGE_MODE = stringPreferencesKey("image_mode")
         val AUTO_UPDATE = booleanPreferencesKey("auto_check_updates")
         val LAST_UPDATE_CHECK = androidx.datastore.preferences.core.longPreferencesKey("last_update_check")
-        val SIGNATURE_TEXT = stringPreferencesKey("signature_text")
         val RECENT_PERIOD = stringPreferencesKey("recent_period")
     }
 }

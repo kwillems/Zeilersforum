@@ -64,7 +64,6 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -137,10 +136,8 @@ class ReplyViewModel(
                         ForumRepository.Image("foto_${System.currentTimeMillis()}_${i + 1}.jpg", compress(context, uri))
                     }
                 }
-                val settings = app.settings.settings.first()
-                val signature = settings.signatureText.takeIf { settings.appSignature }
-                if (newTopic) app.forum.createTopic(form, s.subject, s.text, images, signature)
-                else { app.forum.postReply(form, s.text, images, signature); null }
+                if (newTopic) app.forum.createTopic(form, s.subject, s.text, images)
+                else { app.forum.postReply(form, s.text, images); null }
             }.onSuccess { url ->
                 _state.update { it.copy(sending = false, posted = true, newTopicUrl = url) }
             }.onFailure { e ->
