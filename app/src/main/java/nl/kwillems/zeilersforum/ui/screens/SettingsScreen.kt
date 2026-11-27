@@ -23,6 +23,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.foundation.border
@@ -67,40 +71,8 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     var editSignature by remember { mutableStateOf(false) }
     var debugResult by remember { mutableStateOf<String?>(null) }
     var choosePeriod by remember { mutableStateOf(false) }
-    var chooseIcon by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var appIcon by remember { mutableStateOf(AppIcon.current(ctx)) }
-
-    if (chooseIcon) AlertDialog(
-        onDismissRequest = { chooseIcon = false },
-        title = { Text("App-icoon") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "Het icoon op je startscherm verandert na een paar seconden. Verdwijnt het van je startscherm, " +
-                        "sleep het dan opnieuw uit de app-lijst.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    AppIcon.entries.forEach { icon ->
-                        IconChoice(icon, selected = icon == appIcon) {
-                            if (icon != appIcon) {
-                                AppIcon.set(ctx, icon)
-                                appIcon = icon
-                            }
-                            chooseIcon = false
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { chooseIcon = false }) { Text("Sluiten") } },
-    )
 
     if (choosePeriod) AlertDialog(
         onDismissRequest = { choosePeriod = false },
@@ -177,6 +149,7 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
                         },
                     )
                 },
+                trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
                 modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = { choosePeriod = true }),
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -216,13 +189,32 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-            Section("Weergave")
-            ListItem(
-                headlineContent = { Text("App-icoon") },
-                supportingContent = { Text(appIcon.label) },
-                leadingContent = { AppIconImage(appIcon, 40.dp) },
-                modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = { chooseIcon = true }),
+            Section("App-icoon")
+            Text(
+                "Tik op een icoon om het te kiezen. Je startscherm toont het na een paar seconden; " +
+                    "verdwijnt het daar, zet de app dan opnieuw op je startscherm vanuit de app-lijst.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                AppIcon.entries.forEach { icon ->
+                    IconChoice(icon, selected = icon == appIcon) {
+                        if (icon != appIcon) {
+                            AppIcon.set(ctx, icon)
+                            appIcon = icon
+                        }
+                    }
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("Weergave")
             Choice("Systeem volgen", null, s.themeMode == ThemeMode.SYSTEM) { scope.launch { app.settings.setThemeMode(ThemeMode.SYSTEM) } }
             Choice("Licht", null, s.themeMode == ThemeMode.LIGHT) { scope.launch { app.settings.setThemeMode(ThemeMode.LIGHT) } }
             Choice("Donker", null, s.themeMode == ThemeMode.DARK) { scope.launch { app.settings.setThemeMode(ThemeMode.DARK) } }
@@ -326,7 +318,15 @@ private fun IconChoice(icon: AppIcon, selected: Boolean, onClick: () -> Unit) {
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(vertical = 6.dp, horizontal = 2.dp),
     ) {
-        AppIconImage(icon, 52.dp)
+        Box {
+            AppIconImage(icon, 52.dp)
+            if (selected) Icon(
+                Icons.Filled.CheckCircle, "Gekozen",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).size(20.dp)
+                    .background(MaterialTheme.colorScheme.surface, androidx.compose.foundation.shape.CircleShape),
+            )
+        }
         Text(
             icon.label,
             style = MaterialTheme.typography.labelSmall,

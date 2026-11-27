@@ -41,6 +41,11 @@ Heb je nog de oude app (2.x)? Die heeft een andere pakketnaam, blijft gewoon naa
 3. *Alleen de eerste keer:* tik op **Toestemming geven**, zet **Toestaan van deze bron** aan voor Zeilersforum en ga terug.
 4. Tik op **Installeren** en bevestig bij Android met **Updaten**. De app sluit, wordt bijgewerkt en je tikt op **Openen**. Instellingen en inlog blijven bewaard.
 
+## Bijwerken
+Nieuwe versies installeer je via **Instellingen → Updates** in de app, of door de nieuwste APK van [Releases](https://github.com/kwillems/Zeilersforum/releases/latest) te openen.
+
+**Let op bij de overstap naar het instelbare app-icoon** (na versie 3.0.5): de app krijgt standaard het icoon "Ballon". Op sommige toestellen haalt Android bij deze update de snelkoppeling van de app van het startscherm weg. Zet de app dan opnieuw op je startscherm vanuit de app-lijst. Hetzelfde kan gebeuren als je later een ander icoon kiest.
+
 ## Bouwen
 - Kotlin, Jetpack Compose en Material 3 (Material You, donkere modus, edge-to-edge)
 - compileSdk/targetSdk 37 (Android 17), minSdk 26 (Android 8)
