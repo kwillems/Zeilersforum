@@ -6,6 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,7 +49,17 @@ data class TopicState(
 ) {
     /** Laagste geladen pagina; bij oud → nieuw kunnen de pagina's daarvoor nog worden geladen. */
     val firstLoadedPage: Int get() = loadedPages.minOrNull() ?: 1
-    val hasEarlier: Boolean get() = order == PostOrder.OLDEST_FIRST && firstLoadedPage > 1
+    val lastLoadedPage: Int get() = loadedPages.maxOrNull() ?: 1
+
+    /**
+     * Pagina die boven de lijst hoort maar nog niet geladen is: bij oud → nieuw de pagina vóór
+     * de eerste geladen pagina, bij nieuw → oud de pagina ná de laatste. null = niets meer.
+     */
+    val pageAbove: Int? get() = when (order) {
+        PostOrder.OLDEST_FIRST -> (firstLoadedPage - 1).takeIf { it >= 1 }
+        PostOrder.NEWEST_FIRST -> (lastLoadedPage + 1).takeIf { it <= totalPages }
+    }.takeIf { loadedPages.isNotEmpty() }
+    val hasEarlier: Boolean get() = pageAbove != null
 
     companion object {
         const val SCROLL_TOP = "#top"
@@ -90,8 +101,9 @@ class TopicViewModel(
                 _state.update { it.copy(order = order) }
                 val first = firstLoad
                 firstLoad = false
-                // Bij de eerste keer openen (oud → nieuw, gewone link): verder waar je was gebleven.
-                val resume = if (first && order == PostOrder.OLDEST_FIRST && linkStart == 0 && anchor == null)
+                // Bij de eerste keer openen (gewone link): verder waar je was gebleven, als dat is ingesteld.
+                val mode = app.settings.settings.first().resumeMode
+                val resume = if (first && mode.appliesTo(order) && linkStart == 0 && anchor == null)
                     app.readingPositions.get(topicId) else null
                 load(
                     order,
@@ -141,7 +153,8 @@ class TopicViewModel(
             runCatching {
                 val first: TopicPage = when {
                     startPage != null -> app.forum.topicPage(pageUrl(startPage))
-                    order == PostOrder.OLDEST_FIRST && linkStart > 0 && _state.value.posts.isEmpty() ->
+                    // Link naar een bepaalde pagina/bericht: die pagina, in beide volgordes.
+                    linkStart > 0 && _state.value.posts.isEmpty() ->
                         app.forum.topicPage("$baseUrl?start=$linkStart")
                     order == PostOrder.OLDEST_FIRST -> app.forum.topicPage(baseUrl)
                     else -> {
@@ -161,8 +174,9 @@ class TopicViewModel(
                 remember(page)
                 val next = if (order == PostOrder.NEWEST_FIRST) page.page - 1 else page.page + 1
                 val target = scrollTo?.takeIf { t -> t == TopicState.SCROLL_TOP || page.posts.any { p -> p.id == t } }
-                // Melding alleen als er echt iets te zien was verderop (niet bij het eerste bericht).
-                val showResumed = resuming && (page.page > 1 || (target != null && page.posts.firstOrNull()?.id != target))
+                // Melding alleen als je niet toch al bij het begin (of het nieuwste) zou uitkomen.
+                val startOfList = if (order == PostOrder.NEWEST_FIRST) page.page >= page.totalPages else page.page <= 1
+                val showResumed = resuming && (!startOfList || (target != null && ordered(page, order).firstOrNull()?.id != target))
                 _state.update {
                     it.copy(
                         posts = ordered(page, order),
@@ -212,11 +226,11 @@ class TopicViewModel(
 
     private fun remember(page: TopicPage) = page.posts.forEach { postPage[it.id] = page.page }
 
-    /** Laadt bij oud → nieuw de pagina vóór de eerste geladen pagina en zet die bovenaan. */
+    /** Laadt de pagina die boven de lijst hoort (eerdere bij oud → nieuw, nieuwere bij nieuw → oud). */
     fun loadPrevious() {
         val s = _state.value
-        if (!s.hasEarlier || s.loading || s.loadingPrevious || s.refreshing) return
-        val prev = s.firstLoadedPage - 1
+        val prev = s.pageAbove ?: return
+        if (s.loading || s.loadingPrevious || s.refreshing) return
         viewModelScope.launch {
             _state.update { it.copy(loadingPrevious = true) }
             runCatching { app.forum.topicPage(pageUrl(prev)) }
@@ -226,7 +240,7 @@ class TopicViewModel(
                     _state.update {
                         val known = it.posts.map { p -> p.id }.toSet()
                         it.copy(
-                            posts = page.posts.filter { p -> p.id !in known } + it.posts,
+                            posts = ordered(page, it.order).filter { p -> p.id !in known } + it.posts,
                             loadedPages = it.loadedPages + page.page,
                             loadingPrevious = false,
                         )
@@ -253,8 +267,12 @@ class TopicViewModel(
     fun clearScroll() = _state.update { it.copy(scrollTo = null) }
     fun clearResumed() = _state.update { it.copy(resumed = false) }
 
-    /** "Naar het begin": eerste pagina, bovenaan. */
-    fun toBeginning() = load(_state.value.order, initial = true, startPage = 1, scrollTo = TopicState.SCROLL_TOP)
+    /** "Naar het begin" (oud → nieuw) of "Naar het nieuwste" (nieuw → oud): bovenaan de gewone startpagina. */
+    fun toBeginning() {
+        val order = _state.value.order
+        if (order == PostOrder.NEWEST_FIRST) load(order, initial = true, scrollTo = TopicState.SCROLL_TOP)
+        else load(order, initial = true, startPage = 1, scrollTo = TopicState.SCROLL_TOP)
+    }
 
     /**
      * Opnieuw laden. Bij oud → nieuw vanaf de pagina waar je bent, en je blijft bij hetzelfde bericht;

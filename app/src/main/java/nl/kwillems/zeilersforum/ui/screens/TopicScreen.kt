@@ -146,7 +146,9 @@ fun TopicScreen(
             // In een eigen coroutine: het wissen van de vlag start dit effect opnieuw, de melding moet blijven.
             scope.launch {
                 val r = snackbar.showSnackbar(
-                    "Verder waar je was gebleven", actionLabel = "Naar het begin", withDismissAction = true,
+                    "Verder waar je was gebleven",
+                    actionLabel = if (state.order == PostOrder.NEWEST_FIRST) "Naar het nieuwste" else "Naar het begin",
+                    withDismissAction = true,
                     duration = SnackbarDuration.Long,
                 )
                 if (r == SnackbarResult.ActionPerformed) vm.toBeginning()
@@ -301,7 +303,11 @@ fun TopicScreen(
                             if (state.loadingPrevious) CircularProgressIndicator(Modifier.padding(8.dp).size(28.dp))
                             else FilledTonalButton(onClick = vm::loadPrevious) {
                                 Icon(Icons.Filled.KeyboardArrowUp, null)
-                                Text("Eerdere berichten (pagina ${state.firstLoadedPage - 1})", Modifier.padding(start = 6.dp))
+                                Text(
+                                    (if (state.order == PostOrder.NEWEST_FIRST) "Nieuwere berichten" else "Eerdere berichten") +
+                                        " (pagina ${state.pageAbove})",
+                                    Modifier.padding(start = 6.dp),
+                                )
                             }
                         }
                     }
