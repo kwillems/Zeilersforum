@@ -316,10 +316,10 @@ class ForumRepository(
     // ---------- Reageren ----------
 
     /**
-     * Een bijlage om te versturen. Foto's ([inline]) worden ook in de tekst gezet met
-     * [attachment:n]naam[/attachment]; andere bestanden staan alleen onder het bericht.
+     * Een bijlage om te versturen. [key] koppelt een foto aan zijn [attachment:key] in de tekst;
+     * [inline] = foto (verkleind), anders een bestand.
      */
-    class Upload(val fileName: String, val bytes: ByteArray, val mimeType: String, val inline: Boolean)
+    class Upload(val fileName: String, val bytes: ByteArray, val mimeType: String, val inline: Boolean, val key: Int? = null)
 
     suspend fun replyForm(replyUrl: String, topicTitle: String): ReplyForm {
         var html = get(replyUrl)
@@ -381,12 +381,7 @@ class ForumRepository(
         form: PostForm, subject: String, message: String, images: List<Upload>,
         succeeded: (String) -> Boolean = ForumParser::replySucceeded,
     ): String {
-        val text = buildString {
-            append(message.trimEnd())
-            images.forEachIndexed { i, img ->
-                if (img.inline) append("\n\n[attachment:${i + 1}]${img.fileName}[/attachment]")
-            }
-        }
+        val text = withAttachmentNumbers(message.trimEnd(), images)
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             form.fields.forEach { (k, v) -> if (k != "subject" && k != "message") addFormDataPart(k, v) }
             addFormDataPart("subject", subject)
@@ -404,6 +399,18 @@ class ForumRepository(
     }
 
     companion object {
+        /**
+         * In de tekst staan foto's als [attachment:key]; de site verwacht het nummer van de upload
+         * (kattachment1, 2, …). Nummert om. Foto's die niet in de tekst staan, komen alleen als
+         * bijlage onder het bericht, net als op de website.
+         */
+        fun withAttachmentNumbers(message: String, uploads: List<Upload>): String {
+            val indexByKey = uploads.withIndex().filter { it.value.key != null }.associate { it.value.key!! to it.index + 1 }
+            return Regex("""\[attachment:(\d+)]""").replace(message) { m ->
+                indexByKey[m.groupValues[1].toInt()]?.let { "[attachment:$it]" } ?: m.value
+            }
+        }
+
         const val BASE = ForumParser.BASE
         const val RECENT_URL = "$BASE/index.php/forum-hoofdmenu-37/recente-onderwerpen"
         const val INDEX_URL = "$BASE/index.php/forum-125/index"

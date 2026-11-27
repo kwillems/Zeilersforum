@@ -5,6 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -83,10 +88,19 @@ import kotlin.math.max
 /** Een gekozen bestand (geen foto) met naam en grootte, voor in de lijst. */
 data class PickedFile(val uri: Uri, val name: String, val size: Long)
 
+/**
+ * Een gekozen foto. [key] is een vast nummer zolang het scherm open is; in de tekst staat de foto
+ * als [attachment:key]naam[/attachment]. Bij versturen wordt dat omgenummerd naar de volgorde van de uploads.
+ */
+data class PickedPhoto(val uri: Uri, val key: Int, val fileName: String) {
+    val tag: String get() = "[attachment:$key]$fileName[/attachment]"
+}
+
 data class ReplyState(
     val subject: String = "",
-    val text: String = "",
-    val photos: List<Uri> = emptyList(),
+    /** Tekst met cursorpositie, zodat foto's op de plek van de cursor kunnen worden ingevoegd. */
+    val textField: TextFieldValue = TextFieldValue(""),
+    val photos: List<PickedPhoto> = emptyList(),
     /** Andere bijlagen dan foto's (pdf, gpx, …); gaan ongewijzigd mee. */
     val files: List<PickedFile> = emptyList(),
     /** Bij bewerken: ids van bestaande bijlagen die bij opslaan weg moeten. */
@@ -99,7 +113,15 @@ data class ReplyState(
     val posted: Boolean = false,
     /** Na een nieuw onderwerp: de link ernaartoe. */
     val newTopicUrl: String? = null,
-)
+) {
+    val text: String get() = textField.text
+
+    /** Staat deze foto al ergens in de tekst? */
+    fun inText(photo: PickedPhoto) = text.contains("[attachment:${photo.key}]")
+}
+
+/** Tekstveld met de cursor aan het eind. */
+private fun textAtEnd(t: String) = TextFieldValue(t, TextRange(t.length))
 
 class ReplyViewModel(
     private val app: ZfApp,
@@ -111,7 +133,14 @@ class ReplyViewModel(
     /** true = eigen bericht bewerken; [replyUrl] is dan de link "Bewerk". */
     val edit: Boolean = false,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(ReplyState(text = quote.orEmpty()))
+    private val _state = MutableStateFlow(ReplyState(textField = textAtEnd(quote.orEmpty())))
+    private var nextPhotoKey = 1
+    private val photoTime = System.currentTimeMillis()
+
+    private fun newPhoto(uri: Uri): PickedPhoto {
+        val key = nextPhotoKey++
+        return PickedPhoto(uri, key, "foto_${photoTime}_$key.jpg")
+    }
     val state: StateFlow<ReplyState> = _state
     val title = topicTitle
 
@@ -130,7 +159,7 @@ class ReplyViewModel(
                 .onSuccess { f ->
                     _state.update {
                         // Bij bewerken de huidige tekst en titel invullen (alleen de eerste keer).
-                        if (edit && it.form == null) it.copy(form = f, loadingForm = false, text = f.message.trimEnd(), subject = f.subject)
+                        if (edit && it.form == null) it.copy(form = f, loadingForm = false, textField = textAtEnd(f.message.trimEnd()), subject = f.subject)
                         else it.copy(form = f, loadingForm = false)
                     }
                 }
@@ -142,7 +171,29 @@ class ReplyViewModel(
         }
     }
 
-    fun setText(t: String) = _state.update { it.copy(text = t) }
+    fun setText(t: TextFieldValue) = _state.update { it.copy(textField = t) }
+
+    /** Zet [tag] op de plek van de cursor (of in plaats van de selectie), op een eigen regel. */
+    private fun insertAtCursor(tag: String) = _state.update { st ->
+        val v = st.textField
+        val start = minOf(v.selection.start, v.selection.end).coerceIn(0, v.text.length)
+        val end = maxOf(v.selection.start, v.selection.end).coerceIn(0, v.text.length)
+        val before = v.text.substring(0, start)
+        val after = v.text.substring(end)
+        val pre = if (before.isEmpty() || before.endsWith("\n")) "" else "\n"
+        val post = if (after.startsWith("\n")) "" else "\n"
+        val insert = pre + tag + post
+        st.copy(textField = TextFieldValue(before + insert + after, TextRange(before.length + insert.length)))
+    }
+
+    fun insertPhoto(photo: PickedPhoto) = insertAtCursor(photo.tag)
+    fun insertExisting(a: nl.kwillems.zeilersforum.data.FormAttachment) = insertAtCursor("[attachment=${a.id}]${a.name}[/attachment]")
+
+    /** Haalt een verwijzing weg uit de tekst, met de regelovergang erna. */
+    private fun withoutTag(v: TextFieldValue, tag: Regex): TextFieldValue {
+        val t = v.text.replace(tag, "")
+        return if (t == v.text) v else textAtEnd(t)
+    }
     fun setSubject(t: String) = _state.update { it.copy(subject = t) }
 
     fun canSend(s: ReplyState = _state.value) =
@@ -150,8 +201,11 @@ class ReplyViewModel(
 
     fun attachmentCount(s: ReplyState = _state.value) = s.photos.size + s.files.size
 
-    fun addPhotos(uris: List<Uri>) = _state.update {
-        it.copy(photos = (it.photos + uris).distinct().take(MAX_ATTACHMENTS - it.files.size))
+    /** Nieuwe foto's worden alleen bijlage; in de tekst komen ze pas na "Invoegen". */
+    fun addPhotos(uris: List<Uri>) = _state.update { s ->
+        val fresh = uris.distinct().filter { u -> s.photos.none { p -> p.uri == u } }
+            .take(MAX_ATTACHMENTS - s.files.size - s.photos.size)
+        s.copy(photos = s.photos + fresh.map(::newPhoto))
     }
 
     /**
@@ -161,6 +215,7 @@ class ReplyViewModel(
     fun addFiles(context: Context, uris: List<Uri>) {
         val refused = mutableListOf<String>()
         val tooBig = mutableListOf<String>()
+        val photoUris = mutableListOf<Uri>()
         _state.update { st ->
             var s = st
             for (uri in uris) {
@@ -170,7 +225,7 @@ class ReplyViewModel(
                 when {
                     ext !in ForumRepository.ALLOWED_EXTENSIONS -> refused += name
                     size > MAX_FILE_BYTES -> tooBig += name
-                    ext in PHOTO_EXTENSIONS -> if (uri !in s.photos) s = s.copy(photos = s.photos + uri)
+                    ext in PHOTO_EXTENSIONS -> photoUris += uri
                     s.files.none { it.uri == uri } -> s = s.copy(files = s.files + PickedFile(uri, name, size))
                 }
             }
@@ -182,15 +237,19 @@ class ReplyViewModel(
             ).joinToString("\n").ifBlank { null }
             s.copy(error = msg ?: s.error)
         }
+        if (photoUris.isNotEmpty()) addPhotos(photoUris)
     }
 
     fun removeFile(file: PickedFile) = _state.update { it.copy(files = it.files - file) }
-    fun removePhoto(uri: Uri) = _state.update { it.copy(photos = it.photos - uri) }
+    fun removePhoto(photo: PickedPhoto) = _state.update {
+        val tag = Regex("""\[attachment:${photo.key}][^\[]*\[/attachment]\n?""")
+        it.copy(photos = it.photos - photo, textField = withoutTag(it.textField, tag))
+    }
 
     /** Bestaande bijlage weghalen; ook de verwijzing ernaar in de tekst ([attachment=id]…[/attachment]). */
     fun removeAttachment(id: String) = _state.update {
         val tag = Regex("""\[attachment=${Regex.escape(id)}][^\[]*\[/attachment]\n?""")
-        it.copy(removedAttachments = it.removedAttachments + id, text = it.text.replace(tag, ""))
+        it.copy(removedAttachments = it.removedAttachments + id, textField = withoutTag(it.textField, tag))
     }
     fun clearError() = _state.update { it.copy(error = null) }
 
@@ -202,9 +261,8 @@ class ReplyViewModel(
             _state.update { it.copy(sending = true, error = null) }
             runCatching {
                 val images = withContext(Dispatchers.IO) {
-                    val now = System.currentTimeMillis()
-                    s.photos.mapIndexed { i, uri ->
-                        ForumRepository.Upload("foto_${now}_${i + 1}.jpg", compress(context, uri), "image/jpeg", inline = true)
+                    s.photos.map { p ->
+                        ForumRepository.Upload(p.fileName, compress(context, p.uri), "image/jpeg", inline = true, key = p.key)
                     } + s.files.map { f ->
                         val bytes = context.contentResolver.openInputStream(f.uri)?.use { it.readBytes() }
                             ?: error("${f.name} kon niet worden gelezen")
@@ -359,7 +417,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
-                        value = state.text,
+                        value = state.textField,
                         onValueChange = vm::setText,
                         label = { Text(if (vm.newTopic || vm.edit) "Je bericht" else "Je reactie") },
                         minLines = 8,
@@ -372,6 +430,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                         Text("Bijlagen bij dit bericht", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                             items(existing, key = { it.id }) { a ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Box {
                                     AsyncImage(
                                         model = a.thumb ?: a.url, contentDescription = a.name, contentScale = ContentScale.Crop,
@@ -384,6 +443,12 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                                         modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(28.dp)
                                             .clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
                                     ) { Icon(Icons.Filled.Close, "Bijlage verwijderen", Modifier.size(16.dp)) }
+                                }
+                                InsertButton(
+                                    inText = state.text.contains("[attachment=${a.id}]"),
+                                    enabled = !state.sending,
+                                    onClick = { vm.insertExisting(a) },
+                                )
                                 }
                             }
                         }
@@ -422,17 +487,21 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(vertical = 4.dp),
                     ) {
-                        itemsIndexed(state.photos) { _, uri ->
-                            Box {
-                                AsyncImage(
-                                    model = uri, contentDescription = null, contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(104.dp).clip(RoundedCornerShape(12.dp)),
-                                )
-                                IconButton(
-                                    onClick = { vm.removePhoto(uri) },
-                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(28.dp)
-                                        .clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
-                                ) { Icon(Icons.Filled.Close, "Verwijderen", Modifier.size(16.dp)) }
+                        items(state.photos, key = { it.key }) { photo ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box {
+                                    AsyncImage(
+                                        model = photo.uri, contentDescription = null, contentScale = ContentScale.Crop,
+                                        modifier = Modifier.size(104.dp).clip(RoundedCornerShape(12.dp)),
+                                    )
+                                    IconButton(
+                                        onClick = { vm.removePhoto(photo) },
+                                        enabled = !state.sending,
+                                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(28.dp)
+                                            .clip(CircleShape).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
+                                    ) { Icon(Icons.Filled.Close, "Verwijderen", Modifier.size(16.dp)) }
+                                }
+                                InsertButton(inText = state.inText(photo), enabled = !state.sending, onClick = { vm.insertPhoto(photo) })
                             }
                         }
                     }
@@ -451,6 +520,12 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                             trailingIcon = { Icon(Icons.Filled.Close, "Verwijderen", Modifier.size(18.dp)) },
                         )
                     }
+                    if (state.photos.isNotEmpty() || (vm.edit && existing.isNotEmpty())) Text(
+                        "Foto's staan als bijlage onder je bericht. Tik op \"Invoegen\" om een foto op de plek van de cursor " +
+                            "in je tekst te zetten.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text(
                         "Bijlagen: foto's, of bestanden van het type ${ForumRepository.ALLOWED_EXTENSIONS.joinToString(", ")}.",
                         style = MaterialTheme.typography.bodySmall,
@@ -471,4 +546,13 @@ private fun formatSize(bytes: Long): String = when {
     bytes >= 1_000_000 -> String.format(java.util.Locale("nl"), "%.1f MB", bytes / 1_000_000.0)
     bytes >= 1_000 -> "${bytes / 1_000} kB"
     else -> "$bytes bytes"
+}
+
+/** Knop onder een foto: zet hem op de plek van de cursor. Een vinkje als hij al in de tekst staat. */
+@Composable
+private fun InsertButton(inText: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, contentPadding = PaddingValues(horizontal = 8.dp)) {
+        Icon(if (inText) Icons.Filled.Check else Icons.Filled.Add, null, Modifier.size(16.dp))
+        Text(if (inText) "In tekst" else "Invoegen", Modifier.padding(start = 4.dp), style = MaterialTheme.typography.labelMedium)
+    }
 }
