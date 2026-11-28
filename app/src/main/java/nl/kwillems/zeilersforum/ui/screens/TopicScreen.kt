@@ -59,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -117,6 +118,7 @@ fun TopicScreen(
     val refresh by refreshRequest.collectAsStateWithLifecycle()
     val autoLoad = autoLoadImages(settings.imageMode)
     val ctx = LocalContext.current
+    val unmetered = nl.kwillems.zeilersforum.ui.components.rememberUnmeteredConnection()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
@@ -132,6 +134,38 @@ fun TopicScreen(
                 vm.refresh()
                 if (state.order == PostOrder.NEWEST_FIRST) listState.scrollToItem(0)
             }
+        }
+    }
+    // Foto's van de komende berichten alvast ophalen, zodat ze klaarstaan als je erbij komt (geen grijze
+    // vlakken bij doorscrollen). Alleen als foto's automatisch mogen laden; op mobiele data minder ver vooruit.
+    // Ze gaan alleen naar de cache op het toestel (niet in het geheugen); bij verlaten van het onderwerp stopt het.
+    val imageLoader = remember(ctx) { coil3.SingletonImageLoader.get(ctx) }
+    val prefetchedImages = remember { mutableSetOf<String>() }
+    val imageJobs = remember { mutableListOf<coil3.request.Disposable>() }
+    DisposableEffect(Unit) { onDispose { imageJobs.forEach { it.dispose() } } }
+    LaunchedEffect(listState, autoLoad, unmetered) {
+        if (!autoLoad) return@LaunchedEffect
+        val ahead = if (unmetered) 5 else 2
+        snapshotFlow {
+            val lastPost = listState.layoutInfo.visibleItemsInfo
+                .lastOrNull { (it.key as? String)?.let { k -> k != "readers" && k != "earlier" } == true }?.key as String?
+            lastPost to state.posts.size
+        }.distinctUntilChanged().collect { (lastPost, _) ->
+            val posts = state.posts
+            val i = posts.indexOfFirst { it.id == lastPost }.takeIf { it >= 0 } ?: return@collect
+            posts.drop(i + 1).take(ahead)
+                .flatMap { p -> inlineImages(p.blocks) + p.attachments.filter { it.isImage }.map { it.url } }
+                .filter { prefetchedImages.add(it) }
+                .forEach { url ->
+                    imageJobs.removeAll { it.isDisposed }
+                    imageJobs += imageLoader.enqueue(
+                        coil3.request.ImageRequest.Builder(ctx)
+                            .data(url)
+                            .size(64, 64) // alleen even klein uitpakken; het gaat om het bestand in de cache
+                            .memoryCachePolicy(coil3.request.CachePolicy.DISABLED)
+                            .build(),
+                    )
+                }
         }
     }
     // Naar een bericht scrollen (opgeslagen leespositie, link met #bericht of na "Naar pagina").
@@ -410,16 +444,7 @@ private fun PostCard(
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Annuleren") } },
         )
     }
-    val inline = remember(post) {
-        fun collect(blocks: List<Block>): List<String> = blocks.flatMap {
-            when (it) {
-                is Block.Image -> listOf(it.src)
-                is Block.Quote -> collect(it.blocks)
-                else -> emptyList()
-            }
-        }
-        collect(post.blocks)
-    }
+    val inline = remember(post) { inlineImages(post.blocks) }
     val images = remember(post) { (inline + post.attachments.filter { it.isImage }.map { it.url }).distinct() }
     val extra = remember(post) { post.attachments.filter { it.url !in inline } }
     val ctx = LocalContext.current
@@ -518,5 +543,14 @@ private fun PostCard(
                 }
             }
         }
+    }
+}
+
+/** Foto's in de tekst van een bericht, ook die in citaten (in volgorde). */
+private fun inlineImages(blocks: List<Block>): List<String> = blocks.flatMap {
+    when (it) {
+        is Block.Image -> listOf(it.src)
+        is Block.Quote -> inlineImages(it.blocks)
+        else -> emptyList()
     }
 }
