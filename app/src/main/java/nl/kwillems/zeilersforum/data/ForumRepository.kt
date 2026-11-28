@@ -221,17 +221,8 @@ class ForumRepository(
         return withContext(Dispatchers.Default) { ForumParser.parseIndex(html, INDEX_URL) }
     }
 
-    suspend fun search(query: String, titleOnly: Boolean, user: String, page: Int): SearchPage {
-        val url = SEARCH_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("query", query)
-            .addQueryParameter("titleonly", if (titleOnly) "1" else "0")
-            .apply { if (user.isNotBlank()) addQueryParameter("searchuser", user) }
-            .addQueryParameter("searchdate", "all")
-            .addQueryParameter("sortby", "lastpost")
-            .addQueryParameter("order", "dec")
-            .addQueryParameter("limit", "25")
-            .apply { if (page > 1) addQueryParameter("start", ((page - 1) * 25).toString()) }
-            .build().toString()
+    suspend fun search(query: String, titleOnly: Boolean, user: String, page: Int, period: SearchPeriod = SearchPeriod.ALL): SearchPage {
+        val url = searchUrl(query, titleOnly, user, page, period)
         val html = forumPage(url)
         return withContext(Dispatchers.Default) { ForumParser.parseSearch(html, url) }
     }
@@ -301,7 +292,7 @@ class ForumRepository(
      * opnieuw inloggen. Anders mist de pagina alles wat alleen voor leden is (zoals het Clubhuis).
      */
     /**
-     * Een forumpagina (lijst, onderwerp, index, zoeken) als alleen het forumgedeelte (tmpl=component).
+     * Een forumpagina (lijst, onderwerp, index, zoeken, formulier) als alleen het forumgedeelte (tmpl=component).
      * Ingelogd bouwt Joomla dan niet de hele website eromheen op (menu, modules): ~0,35-0,5 s in plaats van
      * ~0,9 s. Of je ingelogd bent en hoeveel privéberichten er zijn, staat in het profielblok van het forum.
      */
@@ -413,9 +404,11 @@ class ForumRepository(
      */
     class Upload(val fileName: String, val bytes: ByteArray, val mimeType: String, val inline: Boolean, val key: Int? = null)
 
+    // Formulieren worden als alleen het forumgedeelte opgehaald (de helft van de tijd); versturen gaat
+    // naar de gewone pagina, zodat de meldingen van de site ("Bericht succesvol …") gewoon werken.
+
     suspend fun replyForm(replyUrl: String, topicTitle: String): ReplyForm {
-        var html = get(replyUrl)
-        if (ForumParser.loginForm(html) != null && tryAutoLogin()) html = get(replyUrl)
+        val html = forumPage(replyUrl)
         return withContext(Dispatchers.Default) { ForumParser.replyForm(html, replyUrl, topicTitle) }
     }
 
@@ -430,7 +423,7 @@ class ForumRepository(
 
     /** Bewerkformulier van een eigen bericht (link "Bewerk"), met de huidige tekst. */
     suspend fun editForm(editUrl: String): PostForm {
-        val html = getAsMember(editUrl)
+        val html = forumPage(editUrl)
         debugDump?.invoke("bewerken", withContext(Dispatchers.Default) { redact(html, editUrl) })
         return withContext(Dispatchers.Default) { ForumParser.postForm(html, editUrl, "") }
     }
@@ -456,11 +449,8 @@ class ForumRepository(
 
     /** Formulier voor een nieuw onderwerp, via de link "Nieuw onderwerp" van een categorie. */
     suspend fun newTopicForm(createUrl: String): PostForm {
-        var html = get(createUrl)
-        if (ForumParser.loginForm(html) != null && !ForumParser.isLoggedIn(html)) {
-            if (!tryAutoLogin()) throw NotLoggedInException()
-            html = get(createUrl)
-        }
+        val html = forumPage(createUrl)
+        if (!ForumParser.isLoggedIn(html)) throw NotLoggedInException()
         return withContext(Dispatchers.Default) { ForumParser.postForm(html, createUrl, "") }
     }
 
@@ -528,6 +518,19 @@ class ForumRepository(
     }
 
     companion object {
+        /** Zoekadres; [period] beperkt hoe ver terug (alles doorzoeken kost het forum ~20 s). */
+        fun searchUrl(query: String, titleOnly: Boolean, user: String, page: Int, period: SearchPeriod): String =
+            SEARCH_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("query", query)
+                .addQueryParameter("titleonly", if (titleOnly) "1" else "0")
+                .apply { if (user.isNotBlank()) addQueryParameter("searchuser", user) }
+                .addQueryParameter("searchdate", period.sel)
+                .addQueryParameter("sortby", "lastpost")
+                .addQueryParameter("order", "dec")
+                .addQueryParameter("limit", "25")
+                .apply { if (page > 1) addQueryParameter("start", ((page - 1) * 25).toString()) }
+                .build().toString()
+
         /** Zelfde adres, maar dan alleen het forumgedeelte (zie [forumPage]). */
         fun componentUrl(url: String): String = runCatching {
             url.toHttpUrl().newBuilder().fragment(null).setQueryParameter("tmpl", "component").build().toString()

@@ -179,6 +179,15 @@ data class PmMessage(
 
 enum class PostOrder { OLDEST_FIRST, NEWEST_FIRST }
 
+/**
+ * Hoe ver zoeken teruggaat ([sel] = waarde voor de site). Alles doorzoeken kost het forum ~20 s,
+ * het afgelopen jaar ~1 s.
+ */
+enum class SearchPeriod(val label: String, val sel: String) {
+    YEAR("Afgelopen jaar", "365"),
+    ALL("Alles", "all"),
+}
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 class NotLoggedInException : Exception("Niet ingelogd")

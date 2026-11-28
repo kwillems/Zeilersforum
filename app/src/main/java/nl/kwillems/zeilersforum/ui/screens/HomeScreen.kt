@@ -40,6 +40,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -294,6 +295,7 @@ private fun ForumIndexContent(vm: ForumIndexViewModel, onOpenCategory: (Category
 data class SearchState(
     val query: String = "",
     val titleOnly: Boolean = false,
+    val period: nl.kwillems.zeilersforum.data.SearchPeriod = nl.kwillems.zeilersforum.data.SearchPeriod.YEAR,
     val results: List<SearchResult> = emptyList(),
     val page: Int = 0,
     val totalPages: Int = 0,
@@ -307,7 +309,22 @@ class SearchViewModel(private val app: ZfApp) : ViewModel() {
     private val _state = MutableStateFlow(SearchState())
     val state: StateFlow<SearchState> = _state
 
+    init {
+        // De laatst gekozen periode (standaard het afgelopen jaar).
+        viewModelScope.launch {
+            val p = app.settings.settings.first().searchPeriod
+            _state.update { it.copy(period = p) }
+        }
+    }
+
     fun setQuery(q: String) = _state.update { it.copy(query = q) }
+
+    fun setPeriod(p: nl.kwillems.zeilersforum.data.SearchPeriod) {
+        if (p == _state.value.period) return
+        _state.update { it.copy(period = p) }
+        viewModelScope.launch { app.settings.setSearchPeriod(p) }
+        if (_state.value.searched) search()
+    }
     fun setTitleOnly(v: Boolean) {
         _state.update { it.copy(titleOnly = v) }
         if (_state.value.searched) search()
@@ -321,7 +338,7 @@ class SearchViewModel(private val app: ZfApp) : ViewModel() {
         }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, results = emptyList(), page = 0, searched = true) }
-            runCatching { app.forum.search(q, _state.value.titleOnly, "", 1) }
+            runCatching { app.forum.search(q, _state.value.titleOnly, "", 1, _state.value.period) }
                 .onSuccess { p -> _state.update { it.copy(results = p.results, page = p.page, totalPages = p.totalPages, total = p.total, loading = false) } }
                 .onFailure { e -> _state.update { it.copy(loading = false, error = e.friendly()) } }
         }
@@ -332,7 +349,7 @@ class SearchViewModel(private val app: ZfApp) : ViewModel() {
         if (s.loading || s.page == 0 || s.page >= s.totalPages) return
         viewModelScope.launch {
             _state.update { it.copy(loading = true) }
-            runCatching { app.forum.search(s.query.trim(), s.titleOnly, "", s.page + 1) }
+            runCatching { app.forum.search(s.query.trim(), s.titleOnly, "", s.page + 1, s.period) }
                 .onSuccess { p -> _state.update { it.copy(results = it.results + p.results, page = p.page, totalPages = p.totalPages, loading = false) } }
                 .onFailure { e -> _state.update { it.copy(loading = false, error = e.friendly()) } }
         }
@@ -371,6 +388,17 @@ private fun SearchContent(vm: SearchViewModel, onOpen: (SearchResult) -> Unit, m
                 "${state.total} resultaten", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline,
             )
         }
+        Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            nl.kwillems.zeilersforum.data.SearchPeriod.entries.forEach { p ->
+                FilterChip(selected = state.period == p, onClick = { vm.setPeriod(p) }, label = { Text(p.label) })
+            }
+        }
+        if (state.period == nl.kwillems.zeilersforum.data.SearchPeriod.ALL) Text(
+            "Alles doorzoeken duurt op het forum zo'n 20 seconden.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        )
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
         LazyColumn(
             state = listState,
@@ -380,10 +408,27 @@ private fun SearchContent(vm: SearchViewModel, onOpen: (SearchResult) -> Unit, m
         ) {
             items(state.results, key = { it.url }) { r -> SearchResultCard(r, onClick = { onOpen(r) }) }
             if (state.loading) item {
-                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    if (state.period == nl.kwillems.zeilersforum.data.SearchPeriod.ALL && state.results.isEmpty()) Text(
+                        "Zoeken in alle berichten…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
             }
             if (state.searched && !state.loading && state.results.isEmpty() && state.error == null) item {
-                Text("Niets gevonden", color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        if (state.period == nl.kwillems.zeilersforum.data.SearchPeriod.YEAR) "Niets gevonden in het afgelopen jaar" else "Niets gevonden",
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    if (state.period == nl.kwillems.zeilersforum.data.SearchPeriod.YEAR) TextButton(
+                        onClick = { vm.setPeriod(nl.kwillems.zeilersforum.data.SearchPeriod.ALL) },
+                        contentPadding = PaddingValues(0.dp),
+                    ) { Text("Zoek in alles (duurt zo'n 20 seconden)") }
+                }
             }
         }
     }

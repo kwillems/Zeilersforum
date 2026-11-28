@@ -533,7 +533,8 @@ object ForumParser {
         val form = doc.selectFirst("form#postform, form[name=postform]")
             ?: doc.select("form").firstOrNull { it.selectFirst("textarea[name=message]") != null }
             ?: throw when {
-                doc.selectFirst("input[name=passwd]") != null -> NotLoggedInException()
+                // Gast: inlogveld van de website, of (alleen forumgedeelte) "Welkom, Gasten" in het profielblok.
+                doc.selectFirst("input[name=passwd]") != null || doc.selectFirst("div.k_guest") != null -> NotLoggedInException()
                 else -> ForumException(pageError(html) ?: "Formulier niet gevonden")
             }
         val fields = LinkedHashMap<String, String>()

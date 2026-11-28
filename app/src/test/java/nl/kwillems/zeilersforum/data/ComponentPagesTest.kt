@@ -65,4 +65,37 @@ class ComponentPagesTest {
         assertEquals("$b/recente-onderwerpen?sel=24&tmpl=component", ForumRepository.componentUrl("$b/recente-onderwerpen?sel=24"))
         assertEquals("$b/forum-125/index?tmpl=component", ForumRepository.componentUrl("$b/forum-125/index"))
     }
+
+    @Test fun searchUrlHasPeriod() {
+        val year = ForumRepository.searchUrl("antifouling", false, "", 1, SearchPeriod.YEAR)
+        assertTrue(year.contains("searchdate=365"))
+        assertTrue(year.contains("query=antifouling"))
+        assertFalse(year.contains("start="))
+        val all = ForumRepository.searchUrl("antifouling", true, "", 3, SearchPeriod.ALL)
+        assertTrue(all.contains("searchdate=all"))
+        assertTrue(all.contains("titleonly=1"))
+        assertTrue(all.contains("start=50"))
+    }
+
+    @Test fun guestFormPageIsNotLoggedIn() {
+        // Formulierpagina als alleen het forumgedeelte, voor een gast: geen formulier, wel "Welkom, Gasten".
+        val html = guestBox + """<div class="alert-message">U heeft geen rechten om deze pagina te openen!</div>"""
+        try {
+            ForumParser.postForm(html, "https://zeilersforum.nl/index.php/forum-hoofdmenu-37/x/1-y/reply", "")
+            org.junit.Assert.fail("verwacht: niet ingelogd")
+        } catch (e: NotLoggedInException) {
+            // goed: het scherm toont dan "Je moet ingelogd zijn" met de knop Inloggen
+        }
+    }
+
+    @Test fun memberFormPageGivesForm() {
+        val html = memberBox() + """<form id="postform" name="postform" action="/index.php/forum-hoofdmenu-37">
+            <input type="hidden" name="task" value="post"><input type="hidden" name="abc123" value="1">
+            <input type="text" name="subject" value="Re: Test"><textarea name="message"></textarea></form>"""
+        val form = ForumParser.postForm(html, "https://zeilersforum.nl/index.php/forum-hoofdmenu-37/x/1-y/reply", "")
+        assertEquals("post", form.fields["task"])
+        assertEquals("1", form.fields["abc123"])
+        // Versturen gaat naar de gewone pagina (zonder tmpl=component), zodat de meldingen van de site werken.
+        assertEquals("https://zeilersforum.nl/index.php/forum-hoofdmenu-37/x/1-y/reply", form.postUrl)
+    }
 }

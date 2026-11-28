@@ -23,6 +23,7 @@ data class Settings(
     /** Bij openen van een onderwerp terug naar het bericht waar je was, per volgorde. */
     val resumeOldestFirst: Boolean = true,
     val resumeNewestFirst: Boolean = false,
+    val searchPeriod: SearchPeriod = SearchPeriod.YEAR,
 ) {
     fun resumesFor(order: PostOrder) = when (order) {
         PostOrder.OLDEST_FIRST -> resumeOldestFirst
@@ -64,6 +65,7 @@ class SettingsRepository(private val context: Context) {
             // Overgang van de eerdere keuzelijst (alleen in een testversie geweest).
             resumeOldestFirst = p[RESUME_OLDEST] ?: (p[RESUME_MODE] != "OFF"),
             resumeNewestFirst = p[RESUME_NEWEST] ?: (p[RESUME_MODE] == "ALWAYS"),
+            searchPeriod = p[SEARCH_PERIOD]?.let { runCatching { SearchPeriod.valueOf(it) }.getOrNull() } ?: SearchPeriod.YEAR,
         )
     }
 
@@ -75,6 +77,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setRecentPeriod(v: RecentPeriod) = context.dataStore.edit { it[RECENT_PERIOD] = v.name }
     suspend fun setResumeOldestFirst(v: Boolean) = context.dataStore.edit { it[RESUME_OLDEST] = v }
     suspend fun setResumeNewestFirst(v: Boolean) = context.dataStore.edit { it[RESUME_NEWEST] = v }
+    suspend fun setSearchPeriod(v: SearchPeriod) = context.dataStore.edit { it[SEARCH_PERIOD] = v.name }
     suspend fun setImageMode(v: ImageMode) = context.dataStore.edit { it[IMAGE_MODE] = v.name; it.remove(IMAGES) }
 
 
@@ -90,5 +93,6 @@ class SettingsRepository(private val context: Context) {
         val RESUME_MODE = stringPreferencesKey("resume_mode")
         val RESUME_OLDEST = booleanPreferencesKey("resume_oldest_first")
         val RESUME_NEWEST = booleanPreferencesKey("resume_newest_first")
+        val SEARCH_PERIOD = stringPreferencesKey("search_period")
     }
 }

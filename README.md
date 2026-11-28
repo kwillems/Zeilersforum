@@ -3,7 +3,7 @@
 Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe versie (3.x) die de oorspronkelijke app uit 2016–2017 vervangt.
 
 ## Functies
-- Tabbladen **Recent** (Recente discussies, periode instelbaar: sinds laatste bezoek, uren, week, maand, jaar of alles), **Forum** (categorieën en subcategorieën), **Zoeken** (hele forum) en **Mijn** (meegedaan / zelf gestart)
+- Tabbladen **Recent** (Recente discussies, periode instelbaar: sinds laatste bezoek, uren, week, maand, jaar of alles), **Forum** (categorieën en subcategorieën), **Zoeken** (hele bericht of alleen titels; afgelopen jaar of alles, want alles doorzoeken duurt op het forum zo'n 20 seconden) en **Mijn** (meegedaan / zelf gestart)
 - Nieuw onderwerp starten vanuit een categorie
 - Onderwerpen lezen met foto's, citaten, smileys (als emoji), video-links en bijlagen
 - Volgorde van berichten instelbaar: **oud → nieuw** of **nieuw → oud** (knop ⇅ in een onderwerp, of via Instellingen)
