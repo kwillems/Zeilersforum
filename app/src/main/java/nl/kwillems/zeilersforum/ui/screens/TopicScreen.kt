@@ -188,10 +188,11 @@ fun TopicScreen(
     val nearEnd by remember {
         derivedStateOf {
             val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= listState.layoutInfo.totalItemsCount - 3
+            // Ruim van tevoren (pagina = 25 berichten), zodat je bij doorscrollen niet hoeft te wachten.
+            last >= listState.layoutInfo.totalItemsCount - 10
         }
     }
-    LaunchedEffect(nearEnd, state.posts.size) { if (nearEnd) vm.loadMore() }
+    LaunchedEffect(nearEnd, state.posts.size, state.refreshing, state.loading) { if (nearEnd) vm.loadMore() }
 
     val showTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 4 } }
     // Nieuw → oud: nieuwere berichten die er bij verversen bovenaan bij komen, in beeld houden.

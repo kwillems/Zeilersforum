@@ -174,10 +174,11 @@ fun TopicListContent(
     val nearEnd by remember {
         derivedStateOf {
             val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= listState.layoutInfo.totalItemsCount - 5
+            // Ruim van tevoren (pagina = 40 onderwerpen).
+            last >= listState.layoutInfo.totalItemsCount - 15
         }
     }
-    LaunchedEffect(nearEnd, state.topics.size) { if (nearEnd) vm.loadMore() }
+    LaunchedEffect(nearEnd, state.topics.size, state.refreshing, state.loading) { if (nearEnd) vm.loadMore() }
 
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = { vm.refresh() }, modifier = modifier.fillMaxSize()) {
         when {

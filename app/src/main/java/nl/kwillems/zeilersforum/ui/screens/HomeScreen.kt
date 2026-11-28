@@ -345,7 +345,7 @@ private fun SearchContent(vm: SearchViewModel, onOpen: (SearchResult) -> Unit, m
     val focus = LocalFocusManager.current
     val listState = rememberLazyListState()
     val nearEnd by remember {
-        derivedStateOf { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= listState.layoutInfo.totalItemsCount - 4 }
+        derivedStateOf { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= listState.layoutInfo.totalItemsCount - 10 }
     }
     LaunchedEffect(nearEnd, state.results.size) { if (nearEnd) vm.loadMore() }
 

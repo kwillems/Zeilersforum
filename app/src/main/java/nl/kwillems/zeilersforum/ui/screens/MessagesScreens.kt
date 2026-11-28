@@ -170,7 +170,7 @@ fun PmListContent(
     }
     LaunchedEffect(loggedIn) { if (loggedIn && vm.state.value.needsLogin) vm.refresh(initial = true) }
     val nearEnd by remember {
-        derivedStateOf { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= listState.layoutInfo.totalItemsCount - 4 }
+        derivedStateOf { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= listState.layoutInfo.totalItemsCount - 10 }
     }
     LaunchedEffect(nearEnd, state.items.size) { if (nearEnd) vm.loadMore() }
 
