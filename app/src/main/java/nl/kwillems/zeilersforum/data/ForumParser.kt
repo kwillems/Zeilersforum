@@ -311,6 +311,17 @@ object ForumParser {
         return SMILEYS[name] ?: img.attr("alt").ifBlank { img.attr("title") }
     }
 
+    /** De HTML uit het antwoord van het voorbeeld ({"preview": "…"}), of null (bijv. niet ingelogd: "[]"). */
+    fun previewHtml(json: String): String? = runCatching {
+        kotlinx.serialization.json.Json.parseToJsonElement(json)
+            .let { it as? kotlinx.serialization.json.JsonObject }
+            ?.get("preview")
+            ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+    }.getOrNull()
+
+    /** Opgemaakte tekst van het voorbeeld als blokken, zoals een bericht in een onderwerp. */
+    fun previewBlocks(html: String): List<Block> = contentBlocks(Jsoup.parseBodyFragment(html, BASE).body())
+
     fun contentBlocks(root: Element): List<Block> {
         val out = mutableListOf<Block>()
         val buf = StringBuilder()
@@ -564,9 +575,15 @@ object ForumParser {
                 thumb = li.selectFirst("img")?.absUrl("src")?.takeIf { it.isNotBlank() }?.let(::fixUrl),
             )
         }
+        // De smileybalk: plaatjes die bij een tik hun code invoegen (kbbcode.insert), met de code in alt.
+        val smileys = doc.select("img[onclick*=kbbcode]").mapNotNull { img ->
+            val code = img.attr("alt").trim().ifBlank { img.attr("title").trim() }
+            val src = img.absUrl("src")
+            if (code.isBlank() || src.isBlank()) null else Smiley(code, fixUrl(src))
+        }.distinctBy { it.code }
         return PostForm(
             postUrl = url, fields = fields, subject = subject, message = message,
-            subjectEditable = subjectEditable, attachments = attachments,
+            subjectEditable = subjectEditable, attachments = attachments, smileys = smileys,
         )
     }
 

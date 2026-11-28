@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,6 +53,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -114,6 +118,11 @@ data class ReplyState(
     val posted: Boolean = false,
     /** Na een nieuw onderwerp: de link ernaartoe. */
     val newTopicUrl: String? = null,
+    /** Voorbeeld (opgemaakt door het forum) in plaats van het tekstvak. */
+    val previewing: Boolean = false,
+    val previewLoading: Boolean = false,
+    val previewBlocks: List<nl.kwillems.zeilersforum.data.Block> = emptyList(),
+    val previewError: String? = null,
 ) {
     val text: String get() = textField.text
 
@@ -135,6 +144,8 @@ class ReplyViewModel(
     val edit: Boolean = false,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReplyState(textField = textAtEnd(quote.orEmpty())))
+    /** Instellingen (o.a. waar de opmaakbalk staat). */
+    val settings = app.settings.settings
     private var nextPhotoKey = 1
     private val photoTime = System.currentTimeMillis()
 
@@ -173,6 +184,34 @@ class ReplyViewModel(
     }
 
     fun setText(t: TextFieldValue) = _state.update { it.copy(textField = t) }
+
+    /** Opmaak uit de opmaakbalk toepassen op het berichtveld (zie [nl.kwillems.zeilersforum.ui.editor.BbEditor]). */
+    fun format(f: (TextFieldValue) -> TextFieldValue) = _state.update { it.copy(textField = f(it.textField)) }
+
+    fun showWrite() = _state.update { it.copy(previewing = false) }
+
+    private var previewJob: kotlinx.coroutines.Job? = null
+
+    /** Laat het forum de tekst opmaken (zoals "Voorbeeld" op de site); er wordt niets geplaatst. */
+    fun showPreview() {
+        val s = _state.value
+        _state.update { it.copy(previewing = true, previewLoading = true, previewError = null) }
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            val photos = s.photos.associate { it.key to it.uri.toString() }
+            val text = nl.kwillems.zeilersforum.ui.editor.PreviewPhotos.withMarkers(s.text, photos.keys)
+            runCatching { if (text.isBlank()) emptyList() else app.forum.preview(text) }
+                .onSuccess { blocks ->
+                    _state.update {
+                        it.copy(previewLoading = false, previewBlocks = nl.kwillems.zeilersforum.ui.editor.PreviewPhotos.withPhotos(blocks, photos))
+                    }
+                }
+                .onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _state.update { it.copy(previewLoading = false, previewError = e.friendly()) }
+                }
+        }
+    }
 
     /** Zet [tag] op de plek van de cursor (of in plaats van de selectie), op een eigen regel. */
     private fun insertAtCursor(tag: String) = _state.update { st ->
@@ -351,6 +390,7 @@ class ReplyViewModel(
 @Composable
 fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: String?) -> Unit, onLogin: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val toolbarTop = vm.settings.collectAsStateWithLifecycle(initialValue = null).value?.editorToolbarTop ?: false
     val ctx = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val picker = rememberLauncherForActivityResult(
@@ -389,7 +429,8 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
+        // consumeWindowInsets: de navigatiebalk zit al in [padding], anders telt hij boven het toetsenbord dubbel.
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
             when {
                 // Bewerken heeft de huidige tekst nodig; reageren kan al terwijl het formulier laadt.
                 state.loadingForm && vm.edit -> CircularProgressIndicator(Modifier.padding(32.dp))
@@ -405,10 +446,41 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                     Text(state.error ?: "Het formulier kon niet worden geladen.")
                     Button(onClick = vm::loadForm, modifier = Modifier.padding(top = 16.dp)) { Text("Opnieuw") }
                 }
-                else -> Column(
-                    Modifier.widthIn(max = 840.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                else -> Column(Modifier.fillMaxSize()) {
+                    SingleChoiceSegmentedButtonRow(
+                        Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                            .align(Alignment.CenterHorizontally),
+                    ) {
+                        SegmentedButton(selected = !state.previewing, onClick = vm::showWrite, shape = SegmentedButtonDefaults.itemShape(0, 2)) {
+                            Text("Berichtveld")
+                        }
+                        SegmentedButton(selected = state.previewing, onClick = vm::showPreview, shape = SegmentedButtonDefaults.itemShape(1, 2)) {
+                            Text("Voorbeeld")
+                        }
+                    }
+                    if (state.previewing) PreviewPane(state, vm, Modifier.weight(1f).fillMaxWidth())
+                    else {
+                    val toolbar: @Composable () -> Unit = {
+                        nl.kwillems.zeilersforum.ui.editor.EditorToolbar(
+                            smileys = state.form?.smileys.orEmpty(),
+                            selectedText = {
+                                val v = state.textField
+                                v.text.substring(minOf(v.selection.start, v.selection.end), maxOf(v.selection.start, v.selection.end))
+                            },
+                            onFormat = vm::format,
+                            enabled = !state.sending,
+                            atTop = toolbarTop,
+                        )
+                    }
+                    if (toolbarTop) toolbar()
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                    Column(
+                        Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                     // Vaste ruimte voor het laadbalkje, zodat het tekstvak niet verspringt als het formulier binnen is.
                     Box(Modifier.fillMaxWidth().height(4.dp)) {
                         if (state.loadingForm) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -538,10 +610,15 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "Tip: opmaak werkt met BBCode, zoals [b]vet[/b] en [i]cursief[/i].",
+                        "Opmaak: gebruik de opmaakbalk, of BBCode zoals [b]vet[/b] en [i]cursief[/i]. " +
+                            "Bekijk het resultaat met Voorbeeld.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    }
+                    }
+                    if (!toolbarTop) toolbar()
+                    }
                 }
             }
         }
@@ -560,5 +637,54 @@ private fun InsertButton(inText: Boolean, enabled: Boolean, onClick: () -> Unit)
     TextButton(onClick = onClick, enabled = enabled, contentPadding = PaddingValues(horizontal = 8.dp)) {
         Icon(if (inText) Icons.Filled.Check else Icons.Filled.Add, null, Modifier.size(16.dp))
         Text(if (inText) "In tekst" else "Invoegen", Modifier.padding(start = 4.dp), style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/** Het voorbeeld: de tekst zoals het forum hem opmaakt, met nieuwe foto's op hun plek. */
+@Composable
+private fun PreviewPane(state: ReplyState, vm: ReplyViewModel, modifier: Modifier) {
+    Box(modifier.verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when {
+                state.previewLoading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                state.previewError != null -> Column {
+                    Text(state.previewError, color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = vm::showPreview) { Text("Opnieuw") }
+                }
+                else -> {
+                    androidx.compose.material3.ElevatedCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (vm.newTopic && state.subject.isNotBlank()) Text(state.subject, style = MaterialTheme.typography.titleMedium)
+                            if (state.previewBlocks.isEmpty()) Text("Nog geen tekst", color = MaterialTheme.colorScheme.outline)
+                            else nl.kwillems.zeilersforum.ui.components.PostContent(state.previewBlocks, loadImages = true, onImageClick = {})
+                            // Nieuwe foto's die niet in de tekst staan en bestanden: onder het bericht, zoals op het forum.
+                            val loose = state.photos.filterNot { state.inText(it) }
+                            if (loose.isNotEmpty() || state.files.isNotEmpty()) {
+                                Text("Bijlagen", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                if (loose.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(loose, key = { it.key }) { p ->
+                                        AsyncImage(
+                                            model = p.uri, contentDescription = null, contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(10.dp)),
+                                        )
+                                    }
+                                }
+                                state.files.forEach { f -> Text(f.name, style = MaterialTheme.typography.bodyMedium) }
+                            }
+                        }
+                    }
+                    Text(
+                        "Zo komt het op het forum te staan: de opmaak komt van het forum zelf.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }

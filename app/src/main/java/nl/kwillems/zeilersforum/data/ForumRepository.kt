@@ -404,6 +404,30 @@ class ForumRepository(
      */
     class Upload(val fileName: String, val bytes: ByteArray, val mimeType: String, val inline: Boolean, val key: Int? = null)
 
+    /**
+     * Voorbeeld: het forum maakt de tekst op zoals hij geplaatst zou worden (de knop "Voorbeeld" op de site).
+     * Er wordt niets geplaatst. Alleen voor leden; het antwoord is JSON met "preview" (HTML).
+     */
+    suspend fun preview(message: String): List<Block> {
+        val body = FormBody.Builder().add("body", message).build()
+        val req = Request.Builder().url(PREVIEW_URL)
+            .header("User-Agent", USER_AGENT)
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json")
+            .post(body).build()
+        suspend fun ask() = withContext(Dispatchers.IO) {
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) throw IOException("Server gaf ${resp.code}")
+                resp.body.string()
+            }
+        }
+        // Verlopen sessie: het forum geeft dan een leeg antwoord ("[]"); eerst opnieuw inloggen.
+        val html = ForumParser.previewHtml(ask())
+            ?: (if (credentials.load() != null && tryAutoLogin()) ForumParser.previewHtml(ask()) else null)
+            ?: throw ForumException("Voorbeeld niet beschikbaar")
+        return withContext(Dispatchers.Default) { ForumParser.previewBlocks(html) }
+    }
+
     // Formulieren worden als alleen het forumgedeelte opgehaald (de helft van de tijd); versturen gaat
     // naar de gewone pagina, zodat de meldingen van de site ("Bericht succesvol …") gewoon werken.
 
@@ -557,6 +581,8 @@ class ForumRepository(
         const val PM_URL = "$BASE/index.php/component/uddeim/"
         const val MY_POSTED_URL = "$BASE/index.php/forum-hoofdmenu-37/topics/user/mode-posted"
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android) ZeilersforumApp/3"
+        /** Zelfde adres als de knop "Voorbeeld" op de site gebruikt. */
+        const val PREVIEW_URL = "$BASE/index.php/forum-hoofdmenu-37/topic/edit?format=raw"
 
         /** Bestandstypen die het forum als bijlage accepteert. */
         val ALLOWED_EXTENSIONS = listOf(

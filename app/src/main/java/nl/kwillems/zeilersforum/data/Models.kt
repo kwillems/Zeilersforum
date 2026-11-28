@@ -82,7 +82,12 @@ data class PostForm(
     val subjectEditable: Boolean = true,
     /** Bijlagen die al bij het bericht horen (bij bewerken). */
     val attachments: List<FormAttachment> = emptyList(),
+    /** De smileys van het forum (uit de smileybalk van het formulier), met hun code. */
+    val smileys: List<Smiley> = emptyList(),
 )
+
+/** Smiley van het forum: [code] (bijv. ":laugh:") en het plaatje. */
+data class Smiley(val code: String, val image: String)
 
 /**
  * Bestaande bijlage in het bewerkformulier. De site houdt hem alleen als het vakje

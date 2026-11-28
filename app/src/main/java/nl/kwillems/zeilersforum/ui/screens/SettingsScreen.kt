@@ -135,6 +135,15 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             CheckRow("Bij nieuw → oud", s.resumeNewestFirst) { scope.launch { app.settings.setResumeNewestFirst(it) } }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
+            Section("Berichtveld")
+            Choice("Opmaakbalk onderaan", "Direct boven het toetsenbord, bij je duim", !s.editorToolbarTop) {
+                scope.launch { app.settings.setEditorToolbarTop(false) }
+            }
+            Choice("Opmaakbalk bovenaan", "Bovenaan het scherm, boven het berichtveld", s.editorToolbarTop) {
+                scope.launch { app.settings.setEditorToolbarTop(true) }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
             Section("Foto's in berichten")
             Choice("Altijd laden", "Foto's verschijnen meteen in het bericht", s.imageMode == ImageMode.ALWAYS) {
                 scope.launch { app.settings.setImageMode(ImageMode.ALWAYS) }
