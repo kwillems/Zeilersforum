@@ -10,7 +10,6 @@ import nl.kwillems.zeilersforum.data.CredentialStore
 import nl.kwillems.zeilersforum.data.ForumRepository
 import nl.kwillems.zeilersforum.data.PersistentCookieJar
 import nl.kwillems.zeilersforum.data.SettingsRepository
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -56,31 +55,20 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
     }
 
     private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
-    private var recentPrefetch: Pair<String, kotlinx.coroutines.Deferred<nl.kwillems.zeilersforum.data.TopicsPage>>? = null
-    private var prefetchStarted = 0L
-
     /**
      * Haalt de Recente discussies al op terwijl het scherm nog wordt opgebouwd; ingelogd kost
-     * die pagina het forum zo'n seconde. Het scherm pakt het resultaat op via [takeRecentPrefetch].
+     * die pagina het forum zo'n seconde. De lijst pakt het resultaat op (zie data/Prefetched.kt).
      */
     private fun startRecentPrefetch() {
-        prefetchStarted = System.currentTimeMillis()
         appScope.launch {
-            val period = settings.settings.first().recentPeriod
-            val url = forum.recentUrl(period.sel)
-            val job = async { forum.topicList(url, 1, 40) }
-            synchronized(this@ZfApp) { recentPrefetch = url to job }
+            forum.prefetchTopicList(forum.recentUrl(settings.settings.first().recentPeriod.sel))
         }
     }
 
-    /** Het vooraf opgehaalde resultaat voor [url], één keer en alleen kort na het starten; anders null. */
-    fun takeRecentPrefetch(url: String): kotlinx.coroutines.Deferred<nl.kwillems.zeilersforum.data.TopicsPage>? = synchronized(this) {
-        val p = recentPrefetch ?: return null
-        recentPrefetch = null
-        p.second.takeIf { p.first == url && System.currentTimeMillis() - prefetchStarted < 60_000 }
-    }
-
-    /** Haalt de eerste pagina van een onderwerp alvast op (bij aanraken), zonder op het resultaat te wachten. */
+    /**
+     * Haalt de eerste pagina van een onderwerp alvast op bij een tik, zonder op het resultaat te wachten.
+     * Niet al bij aanraken: het forum markeert een opgehaald onderwerp als gelezen.
+     */
     fun prefetchTopic(url: String, lastPageUrl: String?) {
         appScope.launch {
             runCatching {
@@ -88,6 +76,12 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
             }
         }
     }
+
+    /** Categorie alvast ophalen bij een tik. */
+    fun prefetchCategory(url: String) = forum.prefetchTopicList(url)
+
+    /** Privébericht alvast ophalen bij een tik (openen markeert het toch al als gelezen). */
+    fun prefetchPm(id: String, box: nl.kwillems.zeilersforum.data.PmBox) = forum.prefetchPm(id, box)
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)

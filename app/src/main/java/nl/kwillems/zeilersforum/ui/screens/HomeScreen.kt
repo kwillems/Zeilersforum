@@ -1,6 +1,5 @@
 package nl.kwillems.zeilersforum.ui.screens
 
-import nl.kwillems.zeilersforum.ui.components.prefetchOnHold
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -392,13 +391,7 @@ private fun SearchContent(vm: SearchViewModel, onOpen: (SearchResult) -> Unit, m
 
 @Composable
 private fun SearchResultCard(r: SearchResult, onClick: () -> Unit) {
-    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as ZfApp
-    val prefetch = { app.prefetchTopic(r.url, null) }
-    ElevatedCard(
-        Modifier.fillMaxWidth()
-            .prefetchOnHold(r.url, prefetch)
-            .clickable(onClick = { prefetch(); onClick() }),
-    ) {
+    ElevatedCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (r.avatar != null) AsyncImage(

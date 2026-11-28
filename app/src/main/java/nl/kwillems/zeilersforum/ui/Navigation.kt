@@ -51,9 +51,19 @@ const val REFRESH_KEY = "refresh"
 fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
     val nav = rememberNavController()
 
+    // Bij elke tik meteen beginnen met ophalen, nog voordat het volgende scherm er is (scheelt ~0,5 s).
+    fun openTopic(url: String, title: String = "", last: String? = null) {
+        app.prefetchTopic(url, last)
+        nav.navigate(TopicRoute(url, title, last))
+    }
+    fun openCategory(url: String, name: String) {
+        app.prefetchCategory(url)
+        nav.navigate(CategoryRoute(url, name))
+    }
+
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
-            nav.navigate(TopicRoute(url = deepLink))
+            openTopic(deepLink)
             onDeepLinkHandled()
         }
     }
@@ -69,11 +79,14 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
         composable<TopicsRoute> {
             HomeScreen(
                 app = app,
-                onOpenTopic = { url, title, last -> nav.navigate(TopicRoute(url, title, last)) },
-                onOpenCategory = { c -> nav.navigate(CategoryRoute(c.url, c.name)) },
+                onOpenTopic = { url, title, last -> openTopic(url, title, last) },
+                onOpenCategory = { c -> openCategory(c.url, c.name) },
                 onSettings = { nav.navigate(SettingsRoute) },
                 onLogin = { nav.navigate(LoginRoute) },
-                onOpenMessage = { m, box -> nav.navigate(PmRoute(m.id, box == PmBox.OUTBOX, m.partner)) },
+                onOpenMessage = { m, box ->
+                    app.prefetchPm(m.id, box)
+                    nav.navigate(PmRoute(m.id, box == PmBox.OUTBOX, m.partner))
+                },
                 onComposeMessage = { nav.navigate(PmComposeRoute()) },
             )
         }
@@ -108,8 +121,8 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                 refreshRequest = entry.savedStateHandle.getStateFlow(REFRESH_KEY, false),
                 onRefreshHandled = { entry.savedStateHandle[REFRESH_KEY] = false },
                 onBack = { nav.popBackStack() },
-                onOpenTopic = { t -> nav.navigate(TopicRoute(t.url, t.title, t.lastPostUrl)) },
-                onOpenCategory = { c -> nav.navigate(CategoryRoute(c.url, c.name)) },
+                onOpenTopic = { t -> openTopic(t.url, t.title, t.lastPostUrl) },
+                onOpenCategory = { c -> openCategory(c.url, c.name) },
                 onNewTopic = { create, name -> nav.navigate(ReplyRoute(create, name, null, newTopic = true)) },
             )
         }
@@ -129,8 +142,8 @@ fun ZfNavHost(app: ZfApp, deepLink: String?, onDeepLinkHandled: () -> Unit) {
                 onReply = { replyUrl, title, quote -> nav.navigate(ReplyRoute(replyUrl, title, quote)) },
                 onEdit = { editUrl, title -> nav.navigate(ReplyRoute(editUrl, title, edit = true)) },
                 onLogin = { nav.navigate(LoginRoute) },
-                onOpenTopic = { url -> nav.navigate(TopicRoute(url)) },
-                onOpenCategory = { url, name -> nav.navigate(CategoryRoute(url, name)) },
+                onOpenTopic = { url -> openTopic(url) },
+                onOpenCategory = { url, name -> openCategory(url, name) },
             )
         }
         composable<ImagesRoute> { entry ->

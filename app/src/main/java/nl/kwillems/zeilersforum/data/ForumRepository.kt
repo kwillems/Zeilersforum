@@ -1,7 +1,6 @@
 package nl.kwillems.zeilersforum.data
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -152,7 +151,15 @@ class ForumRepository(
 
     /** Een lijst met onderwerpen: recent, een categorie of "mijn onderwerpen". */
     suspend fun topicList(baseUrl: String, page: Int, perPage: Int, needsLogin: Boolean = false): TopicsPage {
-        val url = if (page <= 1) baseUrl else baseUrl + (if ('?' in baseUrl) "&" else "?") + "start=${(page - 1) * perPage}"
+        val url = listUrl(baseUrl, page, perPage)
+        if (!needsLogin) listPrefetch.take(url)?.let { return it }
+        return fetchTopicList(url, needsLogin)
+    }
+
+    /** Begint alvast met de eerste pagina van een lijst (bij een tik op een categorie, of bij het opstarten). */
+    fun prefetchTopicList(url: String) = listPrefetch.start(url, prefetchScope) { fetchTopicList(url, needsLogin = false) }
+
+    private suspend fun fetchTopicList(url: String, needsLogin: Boolean): TopicsPage {
         val html = getAsMember(url)
         if (needsLogin && !ForumParser.isLoggedIn(html)) throw NotLoggedInException()
         track(html)
@@ -229,30 +236,22 @@ class ForumRepository(
         return withContext(Dispatchers.Default) { ForumParser.parseSearch(html, url) }
     }
 
+    // ---------- Vooraf ophalen (bij een tik, vóórdat het volgende scherm er is) ----------
+    // Alleen bij een echte tik: het forum markeert een geopend onderwerp of privébericht als gelezen.
+
+    private val prefetchScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val topicPrefetch = Prefetched<TopicPage>()
+    private val listPrefetch = Prefetched<TopicsPage>()
+    private val pmPrefetch = Prefetched<PmMessage>()
+
+    /** Begint alvast met een pagina van een onderwerp; [topicPage] pakt het resultaat op. */
+    fun prefetchTopicPage(url: String) = topicPrefetch.start(url, prefetchScope) { fetchTopicPage(url) }
+
     /**
      * Haalt een pagina van een onderwerp op. Logt eerst automatisch (opnieuw) in
      * als er gegevens zijn opgeslagen maar de sessie verlopen is.
      */
-    private val prefetchScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
-    private val prefetched = mutableMapOf<String, Pair<Long, kotlinx.coroutines.Deferred<TopicPage>>>()
-
-    /** Begint alvast met ophalen (bij aanraken van een onderwerp); [topicPage] pakt het resultaat op. */
-    fun prefetchTopicPage(url: String) {
-        val now = System.currentTimeMillis()
-        synchronized(prefetched) {
-            prefetched.entries.removeAll { now - it.value.first > PREFETCH_MAX_AGE }
-            if (url in prefetched) return
-            prefetched[url] = now to prefetchScope.async { fetchTopicPage(url) }
-        }
-    }
-
-    suspend fun topicPage(url: String): TopicPage {
-        val pre = synchronized(prefetched) { prefetched.remove(url) }
-        if (pre != null && System.currentTimeMillis() - pre.first <= PREFETCH_MAX_AGE) {
-            runCatching { pre.second.await() }.getOrNull()?.let { return it }
-        }
-        return fetchTopicPage(url)
-    }
+    suspend fun topicPage(url: String): TopicPage = topicPrefetch.take(url) ?: fetchTopicPage(url)
 
     private suspend fun fetchTopicPage(url: String): TopicPage {
         val html = getAsMember(url)
@@ -357,8 +356,15 @@ class ForumRepository(
         return withContext(Dispatchers.Default) { ForumParser.parsePmList(html, url) }
     }
 
-    suspend fun pmMessage(id: String, box: PmBox): PmMessage {
-        val url = "$PM_URL?task=${if (box == PmBox.INBOX) "show" else "showout"}&messageid=$id"
+    private fun pmUrl(id: String, box: PmBox) = "$PM_URL?task=${if (box == PmBox.INBOX) "show" else "showout"}&messageid=$id"
+
+    suspend fun pmMessage(id: String, box: PmBox): PmMessage = pmPrefetch.take(pmUrl(id, box)) ?: fetchPm(id, box)
+
+    /** Begint alvast met een privébericht (bij een tik in de lijst; openen markeert het als gelezen). */
+    fun prefetchPm(id: String, box: PmBox) = pmPrefetch.start(pmUrl(id, box), prefetchScope) { fetchPm(id, box) }
+
+    private suspend fun fetchPm(id: String, box: PmBox): PmMessage {
+        val url = pmUrl(id, box)
         val html = getLoggedIn(url)
         return withContext(Dispatchers.Default) { ForumParser.parsePm(html, url) }
     }
@@ -457,9 +463,7 @@ class ForumRepository(
         val topicUrl = finalUrl.takeIf { Regex("/\\d+-[^/]+").containsMatchIn(it) && !it.contains("/create") }
         // Een nieuw onderwerp heeft één pagina: het topicscherm kan die meteen tonen.
         posted?.takeIf { topicUrl != null && it.topicBase == ForumParser.baseTopicUrl(topicUrl) && it.page.totalPages <= 1 }?.let { p ->
-            synchronized(prefetched) {
-                prefetched[p.topicBase] = System.currentTimeMillis() to kotlinx.coroutines.CompletableDeferred(p.page)
-            }
+            topicPrefetch.put(p.topicBase, p.page)
         }
         return topicUrl
     }
@@ -528,9 +532,6 @@ class ForumRepository(
                 indexByKey[m.groupValues[1].toInt()]?.let { "[attachment:$it]" } ?: m.value
             }
         }
-
-        /** Een vooraf opgehaalde pagina telt maar even; daarna wordt opnieuw opgehaald. */
-        private const val PREFETCH_MAX_AGE = 20_000L
 
         const val BASE = ForumParser.BASE
         const val RECENT_URL = "$BASE/index.php/forum-hoofdmenu-37/recente-onderwerpen"

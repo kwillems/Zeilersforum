@@ -1,7 +1,5 @@
 package nl.kwillems.zeilersforum.ui.screens
 
-import nl.kwillems.zeilersforum.ui.components.prefetchOnHold
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -106,12 +104,8 @@ class TopicListViewModel(
                     }
                 }
             }
-            runCatching {
-                // Bij het opstarten heeft de app de Recente discussies misschien al opgehaald.
-                val pre = if (initial) app.takeRecentPrefetch(baseUrl) else null
-                pre?.let { d -> runCatching { d.await() }.getOrNull() }
-                    ?: app.forum.topicList(baseUrl, 1, _state.value.perPage, needsLogin)
-            }
+            // Is deze lijst al opgehaald (bij het opstarten of bij de tik), dan pakt topicList dat resultaat op.
+            runCatching { app.forum.topicList(baseUrl, 1, _state.value.perPage, needsLogin) }
                 .onSuccess { p ->
                     _state.update {
                         TopicListState(
@@ -228,13 +222,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun TopicCard(topic: TopicSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val app = LocalContext.current.applicationContext as ZfApp
-    val prefetch = { app.prefetchTopic(topic.url, topic.lastPostUrl) }
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth()
-            .prefetchOnHold(topic.url, prefetch)
-            .clickable(onClick = { prefetch(); onClick() }),
-    ) {
+    ElevatedCard(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
