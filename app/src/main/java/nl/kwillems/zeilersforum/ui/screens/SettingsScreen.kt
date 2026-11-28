@@ -67,6 +67,29 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
     var choosePeriod by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var appIcon by remember { mutableStateOf(AppIcon.current(ctx)) }
+    val hidden by app.hiddenTopics.items.collectAsStateWithLifecycle()
+    var showHidden by remember { mutableStateOf(false) }
+
+    if (showHidden) AlertDialog(
+        onDismissRequest = { showHidden = false },
+        title = { Text("Verborgen threads") },
+        text = {
+            if (hidden.isEmpty()) Text("Er zijn geen verborgen threads meer.")
+            else Column(Modifier.verticalScroll(rememberScrollState())) {
+                hidden.forEach { h ->
+                    ListItem(
+                        headlineContent = { Text(h.title.ifBlank { "Thread ${h.id}" }, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                        trailingContent = { TextButton(onClick = { app.hiddenTopics.show(h.id) }) { Text("Tonen") } },
+                        colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showHidden = false }) { Text("Sluiten") } },
+        dismissButton = if (hidden.size > 1) {
+            { TextButton(onClick = { app.hiddenTopics.showAll(); showHidden = false }) { Text("Alles tonen") } }
+        } else null,
+    )
 
     if (choosePeriod) AlertDialog(
         onDismissRequest = { choosePeriod = false },
@@ -113,7 +136,21 @@ fun SettingsScreen(app: ZfApp, onBack: () -> Unit, onLogin: () -> Unit) {
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-            Section("Berichten")
+            Section("Threads verbergen")
+            Toggle(
+                "Threads kunnen verbergen",
+                "Met het doorgestreepte oog bij een thread haal je die weg uit Recent, Forum en Mijn. Uit: alles wordt weer getoond, maar de app onthoudt wat je verborg.",
+                s.hideTopics,
+            ) { scope.launch { app.settings.setHideTopics(it) } }
+            if (hidden.isNotEmpty()) ListItem(
+                headlineContent = { Text("Verborgen threads (${hidden.size})") },
+                supportingContent = { Text("Tik om ze te bekijken of weer te tonen") },
+                trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
+                modifier = Modifier.selectable(selected = false, role = Role.Button, onClick = { showHidden = true }),
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("Berichten sorteren")
             Choice("Oud → nieuw", "Begin bij het eerste bericht van een onderwerp", s.postOrder == PostOrder.OLDEST_FIRST) {
                 scope.launch { app.settings.setPostOrder(PostOrder.OLDEST_FIRST) }
             }

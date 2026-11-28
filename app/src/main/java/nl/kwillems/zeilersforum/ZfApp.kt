@@ -29,6 +29,8 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
         private set
     lateinit var readingPositions: nl.kwillems.zeilersforum.data.ReadingPositions
         private set
+    lateinit var hiddenTopics: nl.kwillems.zeilersforum.data.HiddenTopics
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -45,6 +47,7 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
         )
         settings = SettingsRepository(this)
         readingPositions = nl.kwillems.zeilersforum.data.ReadingPositions(getSharedPreferences("reading", MODE_PRIVATE))
+        hiddenTopics = nl.kwillems.zeilersforum.data.HiddenTopics(getSharedPreferences("hidden_topics", MODE_PRIVATE))
         startRecentPrefetch()
         updates = nl.kwillems.zeilersforum.data.UpdateManager(this, client, settings)
         if (BuildConfig.DEBUG) {

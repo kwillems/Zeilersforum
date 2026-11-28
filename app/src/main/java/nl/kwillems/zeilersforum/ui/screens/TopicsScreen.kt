@@ -21,6 +21,13 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Attachment
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -71,7 +78,7 @@ data class TopicListState(
 
 /** Een lijst met onderwerpen die pagina voor pagina geladen wordt (recent, categorie, mijn onderwerpen). */
 class TopicListViewModel(
-    private val app: ZfApp,
+    val app: ZfApp,
     private var baseUrl: String,
     private val needsLogin: Boolean = false,
 ) : ViewModel() {
@@ -164,9 +171,25 @@ fun TopicListContent(
     header: LazyListScope.() -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val hideEnabled = vm.app.settings.settings.collectAsStateWithLifecycle(initialValue = null).value?.hideTopics == true
+    val hidden by vm.app.hiddenTopics.items.collectAsStateWithLifecycle()
+    val topics = remember(state.topics, hidden, hideEnabled) {
+        if (!hideEnabled || hidden.isEmpty()) state.topics
+        else hidden.mapTo(HashSet()) { it.id }.let { ids -> state.topics.filter { it.id !in ids } }
+    }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val hide: (TopicSummary) -> Unit = { topic ->
+        vm.app.hiddenTopics.hide(topic.id, topic.title)
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar("Thread verborgen", actionLabel = "Ongedaan maken", duration = SnackbarDuration.Short)
+            if (r == SnackbarResult.ActionPerformed) vm.app.hiddenTopics.show(topic.id)
+        }
+    }
     val listState = rememberLazyListState()
     // Nieuwe onderwerpen bovenaan na verversen (ook na het tonen van de bewaarde versie) in beeld houden.
-    nl.kwillems.zeilersforum.ui.components.StickToTop(listState, state.topics.firstOrNull()?.id, isItem = { (it as? String)?.startsWith("c") != true })
+    nl.kwillems.zeilersforum.ui.components.StickToTop(listState, topics.firstOrNull()?.id, isItem = { (it as? String)?.startsWith("c") != true })
     val nearEnd by remember {
         derivedStateOf {
             val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -176,37 +199,47 @@ fun TopicListContent(
     }
     LaunchedEffect(nearEnd, state.topics.size, state.refreshing, state.loading) { if (nearEnd) vm.loadMore() }
 
-    PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = { vm.refresh() }, modifier = modifier.fillMaxSize()) {
-        when {
-            state.needsLogin -> loginPrompt()
-            state.topics.isEmpty() && state.subcategories.isEmpty() && state.loading ->
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            state.topics.isEmpty() && state.subcategories.isEmpty() && state.error != null ->
-                ErrorPane(state.error!!, onRetry = { vm.refresh(initial = true) })
-            else -> LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                header()
-                if (state.subcategories.isNotEmpty()) {
-                    items(state.subcategories, key = { "c" + it.url }) { c -> CategoryCard(c, onClick = { onOpenCategory(c) }) }
-                    if (state.topics.isNotEmpty()) item { SectionLabel("Onderwerpen") }
-                }
-                items(state.topics, key = { it.id }) { topic ->
-                    TopicCard(topic, onClick = { onOpenTopic(topic) }, modifier = Modifier.animateItem())
-                }
-                if (state.loading) item {
-                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(Modifier.size(28.dp))
+    Box(modifier.fillMaxSize()) {
+        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = { vm.refresh() }, modifier = Modifier.fillMaxSize()) {
+            when {
+                state.needsLogin -> loginPrompt()
+                state.topics.isEmpty() && state.subcategories.isEmpty() && state.loading ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                state.topics.isEmpty() && state.subcategories.isEmpty() && state.error != null ->
+                    ErrorPane(state.error!!, onRetry = { vm.refresh(initial = true) })
+                else -> LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    header()
+                    if (state.subcategories.isNotEmpty()) {
+                        items(state.subcategories, key = { "c" + it.url }) { c -> CategoryCard(c, onClick = { onOpenCategory(c) }) }
+                        if (state.topics.isNotEmpty()) item { SectionLabel("Onderwerpen") }
                     }
-                }
-                if (!state.loading && state.topics.isEmpty() && state.subcategories.isEmpty()) item {
-                    Text(emptyText, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp))
+                    items(topics, key = { it.id }) { topic ->
+                        TopicCard(
+                            topic, onClick = { onOpenTopic(topic) },
+                            onHide = if (hideEnabled) { { hide(topic) } } else null,
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                    if (state.loading) item {
+                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(28.dp))
+                        }
+                    }
+                    if (!state.loading && topics.isEmpty() && state.subcategories.isEmpty()) item {
+                        Text(
+                            if (state.topics.isNotEmpty()) "Alle threads hier zijn verborgen" else emptyText,
+                            color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(16.dp),
+                        )
+                    }
                 }
             }
         }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
     }
 }
 
@@ -221,7 +254,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun TopicCard(topic: TopicSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TopicCard(topic: TopicSummary, onClick: () -> Unit, modifier: Modifier = Modifier, onHide: (() -> Unit)? = null) {
     ElevatedCard(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -247,6 +280,15 @@ fun TopicCard(topic: TopicSummary, onClick: () -> Unit, modifier: Modifier = Mod
                     Icon(Icons.Outlined.ChatBubbleOutline, null, Modifier.size(12.dp))
                     Spacer(Modifier.width(3.dp))
                     Text(topic.replies.toString())
+                }
+                if (onHide != null) {
+                    // Klein houden: de kaart zelf blijft het tikdoel om het onderwerp te openen.
+                    IconButton(onClick = onHide, modifier = Modifier.padding(start = 4.dp).size(28.dp)) {
+                        Icon(
+                            Icons.Outlined.VisibilityOff, "Thread verbergen",
+                            tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             Text(

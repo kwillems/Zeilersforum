@@ -7,8 +7,9 @@ Android-app voor [zeilersforum.nl](https://zeilersforum.nl). Het is een nieuwe v
 - Nieuw onderwerp starten vanuit een categorie
 - Onderwerpen lezen met foto's, citaten, smileys (als emoji), video-links en bijlagen
 - Volgorde van berichten instelbaar: **oud → nieuw** of **nieuw → oud** (knop ⇅ in een onderwerp, of via Instellingen)
-- Verder waar je was gebleven: een onderwerp opent weer bij het bericht waar je was, met "Naar het begin" of "Naar het nieuwste" en een knop voor de pagina's daarboven. Per volgorde aan of uit te zetten onder Instellingen → Berichten (standaard alleen bij oud → nieuw). Links naar een bepaald bericht springen naar dat bericht
+- Verder waar je was gebleven: een onderwerp opent weer bij het bericht waar je was, met "Naar het begin" of "Naar het nieuwste" en een knop voor de pagina's daarboven. Per volgorde aan of uit te zetten onder Instellingen → Berichten sorteren (standaard alleen bij oud → nieuw). Links naar een bepaald bericht springen naar dat bericht
 - Naar een bepaalde pagina springen
+- Threads verbergen: zet het aan onder Instellingen → Threads verbergen; dan staat er bij elke thread in Recent, Forum en Mijn een knop (doorgestreept oog) om die weg te halen, met "Ongedaan maken". Onder Instellingen zie je welke threads verborgen zijn en kun je ze weer tonen
 - Fotoviewer met zoomen en vegen
 - "Wie leest er mee?" bovenaan een onderwerp (als je bent ingelogd)
 - Privéberichten (uddeIM): postvak in, verzonden, lezen, beantwoorden, nieuw bericht en verwijderen, met teller voor ongelezen berichten
