@@ -253,8 +253,16 @@ object ForumParser {
     }
 
     /** Ingelogd als de pagina geen inlogformulier met wachtwoordveld meer toont. */
-    fun isLoggedIn(doc: Document): Boolean =
-        doc.selectFirst("input[name=passwd]") == null && doc.selectFirst("body") != null && doc.select("div.kmsg-header, table#kflattable, form").isNotEmpty()
+    /**
+     * Ingelogd? Op forumpagina's via het profielblok van het forum: een gast krijgt daar "Welkom, Gasten"
+     * (div.k_guest). Dat werkt ook als alleen het forumgedeelte is opgehaald, waar het inlogveld van de
+     * website niet in staat. Op andere pagina's: geen inlogformulier met wachtwoordveld meer.
+     */
+    fun isLoggedIn(doc: Document): Boolean {
+        if (doc.selectFirst("#kprofilebox") != null) return doc.selectFirst("div.k_guest") == null
+        return doc.selectFirst("input[name=passwd]") == null && doc.selectFirst("body") != null &&
+            doc.select("div.kmsg-header, table#kflattable, form").isNotEmpty()
+    }
 
     fun isLoggedIn(html: String): Boolean = isLoggedIn(Jsoup.parse(html, BASE))
 
@@ -387,10 +395,30 @@ object ForumParser {
 
     /** Aantal ongelezen privéberichten volgens de zijmodule "Prive Berichten", of null als die er niet is. */
     fun pmUnread(doc: Document): Int? {
-        val module = doc.selectFirst("#uddeim-modulenew, #uddeim-module") ?: return null
-        val hasNew = module.selectFirst("img[src*=env_ani]") != null
-        return if (!hasNew) 0 else module.select(".uddeim-module-row").size.coerceAtLeast(1)
+        doc.selectFirst("#uddeim-modulenew, #uddeim-module")?.let { module ->
+            val hasNew = module.selectFirst("img[src*=env_ani]") != null
+            return if (!hasNew) 0 else module.select(".uddeim-module-row").size.coerceAtLeast(1)
+        }
+        // Alleen het forumgedeelte (zonder de module van de website): de link "Persoonlijke berichten" in het
+        // profielblok, met "(N nieuw)" als er ongelezen berichten zijn. Zonder getal: onbekend (null), zodat de
+        // teller niet ten onrechte op 0 springt; de pagina's van Berichten zelf werken hem dan bij.
+        val link = doc.selectFirst("#kprofilebox a[href*=uddeim]") ?: return null
+        return PM_COUNT.find(link.text())?.groupValues?.get(1)?.toIntOrNull()
     }
+
+    private val PM_COUNT = Regex("""\((\d+)""")
+
+    // ---------- Alleen het forumgedeelte (tmpl=component) ----------
+
+    private val TMPL_BEFORE_PARAM = Regex("""(\?|&amp;|&)tmpl=component(?:&amp;|&)""")
+    private val TMPL_AT_END = Regex("""(?:\?|&amp;|&)tmpl=component""")
+
+    /**
+     * Haalt "tmpl=component" uit de links van een pagina die als alleen het forumgedeelte is opgehaald
+     * (bijvoorbeeld de paginanummers), zodat links en bewaarde pagina's er net zo uitzien als normaal.
+     */
+    fun withoutComponent(html: String): String =
+        html.replace(TMPL_BEFORE_PARAM, "\$1").replace(TMPL_AT_END, "")
 
     fun pmUnread(html: String): Int? = pmUnread(Jsoup.parse(html, BASE))
 

@@ -160,7 +160,7 @@ class ForumRepository(
     fun prefetchTopicList(url: String) = listPrefetch.start(url, prefetchScope) { fetchTopicList(url, needsLogin = false) }
 
     private suspend fun fetchTopicList(url: String, needsLogin: Boolean): TopicsPage {
-        val html = getAsMember(url)
+        val html = forumPage(url)
         if (needsLogin && !ForumParser.isLoggedIn(html)) throw NotLoggedInException()
         track(html)
         store(url, html)
@@ -215,7 +215,7 @@ class ForumRepository(
     private fun lastPageKey(baseUrl: String) = ForumParser.baseTopicUrl(baseUrl) + "?laatste"
 
     suspend fun forumIndex(): List<Section> {
-        val html = getAsMember(INDEX_URL)
+        val html = forumPage(INDEX_URL)
         track(html)
         store(INDEX_URL, html)
         return withContext(Dispatchers.Default) { ForumParser.parseIndex(html, INDEX_URL) }
@@ -232,7 +232,7 @@ class ForumRepository(
             .addQueryParameter("limit", "25")
             .apply { if (page > 1) addQueryParameter("start", ((page - 1) * 25).toString()) }
             .build().toString()
-        val html = getAsMember(url)
+        val html = forumPage(url)
         return withContext(Dispatchers.Default) { ForumParser.parseSearch(html, url) }
     }
 
@@ -254,7 +254,7 @@ class ForumRepository(
     suspend fun topicPage(url: String): TopicPage = topicPrefetch.take(url) ?: fetchTopicPage(url)
 
     private suspend fun fetchTopicPage(url: String): TopicPage {
-        val html = getAsMember(url)
+        val html = forumPage(url)
         val page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
         track(html)
         if (page.posts.isNotEmpty()) {
@@ -300,6 +300,13 @@ class ForumRepository(
      * GET als lid: is de sessie verlopen terwijl er inloggegevens zijn opgeslagen, dan eerst
      * opnieuw inloggen. Anders mist de pagina alles wat alleen voor leden is (zoals het Clubhuis).
      */
+    /**
+     * Een forumpagina (lijst, onderwerp, index, zoeken) als alleen het forumgedeelte (tmpl=component).
+     * Ingelogd bouwt Joomla dan niet de hele website eromheen op (menu, modules): ~0,35-0,5 s in plaats van
+     * ~0,9 s. Of je ingelogd bent en hoeveel privéberichten er zijn, staat in het profielblok van het forum.
+     */
+    private suspend fun forumPage(url: String): String = ForumParser.withoutComponent(getAsMember(componentUrl(url)))
+
     private suspend fun getAsMember(url: String): String {
         val html = get(url)
         if (ForumParser.isLoggedIn(html) || credentials.load() == null) return html
@@ -521,6 +528,11 @@ class ForumRepository(
     }
 
     companion object {
+        /** Zelfde adres, maar dan alleen het forumgedeelte (zie [forumPage]). */
+        fun componentUrl(url: String): String = runCatching {
+            url.toHttpUrl().newBuilder().fragment(null).setQueryParameter("tmpl", "component").build().toString()
+        }.getOrDefault(url)
+
         /**
          * In de tekst staan foto's als [attachment:key]; de site verwacht het nummer van de upload
          * (kattachment1, 2, …). Nummert om. Foto's die niet in de tekst staan, komen alleen als

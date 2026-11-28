@@ -140,7 +140,8 @@ fun TopicScreen(
         if (state.posts.isEmpty()) return@LaunchedEffect
         val offset = (if (state.readers.isNotEmpty()) 1 else 0) + (if (state.hasEarlier) 1 else 0)
         if (target == TopicState.SCROLL_TOP) listState.scrollToItem(0)
-        else state.posts.indexOfFirst { it.id == target }.takeIf { it >= 0 }?.let { listState.scrollToItem(offset + it) }
+        // Is het het eerste bericht van de lijst, dan helemaal bovenaan (met "Leest mee" erboven in beeld).
+        else state.posts.indexOfFirst { it.id == target }.takeIf { it >= 0 }?.let { listState.scrollToItem(if (it == 0) 0 else offset + it) }
         vm.clearScroll()
     }
     LaunchedEffect(state.resumed) {
