@@ -80,6 +80,15 @@ class ZfApp : Application(), SingletonImageLoader.Factory {
         p.second.takeIf { p.first == url && System.currentTimeMillis() - prefetchStarted < 60_000 }
     }
 
+    /** Haalt de eerste pagina van een onderwerp alvast op (bij aanraken), zonder op het resultaat te wachten. */
+    fun prefetchTopic(url: String, lastPageUrl: String?) {
+        appScope.launch {
+            runCatching {
+                forum.prefetchTopicPage(nl.kwillems.zeilersforum.ui.screens.TopicViewModel.plannedFirstUrl(this@ZfApp, url, lastPageUrl))
+            }
+        }
+    }
+
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }

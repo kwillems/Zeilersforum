@@ -1,5 +1,7 @@
 package nl.kwillems.zeilersforum.ui.screens
 
+import nl.kwillems.zeilersforum.ui.components.prefetchOnHold
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -226,7 +228,13 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun TopicCard(topic: TopicSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    ElevatedCard(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    val app = LocalContext.current.applicationContext as ZfApp
+    val prefetch = { app.prefetchTopic(topic.url, topic.lastPostUrl) }
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth()
+            .prefetchOnHold(topic.url, prefetch)
+            .clickable(onClick = { prefetch(); onClick() }),
+    ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

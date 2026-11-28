@@ -1,6 +1,7 @@
 package nl.kwillems.zeilersforum.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -232,7 +233,28 @@ class ForumRepository(
      * Haalt een pagina van een onderwerp op. Logt eerst automatisch (opnieuw) in
      * als er gegevens zijn opgeslagen maar de sessie verlopen is.
      */
+    private val prefetchScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val prefetched = mutableMapOf<String, Pair<Long, kotlinx.coroutines.Deferred<TopicPage>>>()
+
+    /** Begint alvast met ophalen (bij aanraken van een onderwerp); [topicPage] pakt het resultaat op. */
+    fun prefetchTopicPage(url: String) {
+        val now = System.currentTimeMillis()
+        synchronized(prefetched) {
+            prefetched.entries.removeAll { now - it.value.first > PREFETCH_MAX_AGE }
+            if (url in prefetched) return
+            prefetched[url] = now to prefetchScope.async { fetchTopicPage(url) }
+        }
+    }
+
     suspend fun topicPage(url: String): TopicPage {
+        val pre = synchronized(prefetched) { prefetched.remove(url) }
+        if (pre != null && System.currentTimeMillis() - pre.first <= PREFETCH_MAX_AGE) {
+            runCatching { pre.second.await() }.getOrNull()?.let { return it }
+        }
+        return fetchTopicPage(url)
+    }
+
+    private suspend fun fetchTopicPage(url: String): TopicPage {
         val html = getAsMember(url)
         val page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
         track(html)
@@ -467,6 +489,9 @@ class ForumRepository(
                 indexByKey[m.groupValues[1].toInt()]?.let { "[attachment:$it]" } ?: m.value
             }
         }
+
+        /** Een vooraf opgehaalde pagina telt maar even; daarna wordt opnieuw opgehaald. */
+        private const val PREFETCH_MAX_AGE = 20_000L
 
         const val BASE = ForumParser.BASE
         const val RECENT_URL = "$BASE/index.php/forum-hoofdmenu-37/recente-onderwerpen"

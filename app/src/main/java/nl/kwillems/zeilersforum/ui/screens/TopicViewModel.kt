@@ -87,7 +87,7 @@ class TopicViewModel(
     private var firstLoad = true
     /** Bericht dat nu bovenaan het scherm staat (ook als het niet wordt opgeslagen). */
     private var topPost: String? = null
-    private var perPage = 25
+    private var perPage = DEFAULT_PER_PAGE
     private var job: Job? = null
 
     private val _state = MutableStateFlow(TopicState(title = title))
@@ -338,4 +338,24 @@ class TopicViewModel(
     }
 
     val webUrl: String get() = baseUrl
+
+    companion object {
+        /**
+         * De pagina die het topicscherm als eerste zal ophalen (dezelfde keuzes als in [load]),
+         * zodat die al kan worden opgehaald zodra je een onderwerp aanraakt.
+         */
+        suspend fun plannedFirstUrl(app: ZfApp, url: String, lastPageUrl: String?): String {
+            val base = ForumParser.baseTopicUrl(url)
+            val start = ForumParser.startOf(url)
+            if (start > 0) return "$base?start=$start"
+            val hasAnchor = url.substringAfter('#', "").let { it.isNotEmpty() && it.all(Char::isDigit) }
+            val s = app.settings.settings.first()
+            if (!hasAnchor && s.resumesFor(s.postOrder)) {
+                app.readingPositions.get(ForumParser.topicId(url))?.let { return ForumParser.pageUrl(base, it.page, DEFAULT_PER_PAGE) }
+            }
+            return if (s.postOrder == PostOrder.NEWEST_FIRST) lastPageUrl?.substringBefore('#') ?: base else base
+        }
+
+        const val DEFAULT_PER_PAGE = 25
+    }
 }
