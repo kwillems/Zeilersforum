@@ -194,6 +194,12 @@ fun TopicScreen(
     LaunchedEffect(nearEnd, state.posts.size) { if (nearEnd) vm.loadMore() }
 
     val showTop by remember { derivedStateOf { listState.firstVisibleItemIndex > 4 } }
+    // Nieuw → oud: nieuwere berichten die er bij verversen bovenaan bij komen, in beeld houden.
+    nl.kwillems.zeilersforum.ui.components.StickToTop(
+        listState, state.posts.firstOrNull()?.id,
+        enabled = state.order == PostOrder.NEWEST_FIRST && state.scrollTo == null && !state.loadingPrevious,
+        isItem = { it != "readers" && it != "earlier" },
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),

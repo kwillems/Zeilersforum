@@ -22,6 +22,8 @@ class ForumRepository(
     private val cookies: PersistentCookieJar,
     private val credentials: CredentialStore,
     private val profilePrefs: android.content.SharedPreferences,
+    /** Laatst opgehaalde pagina's, om ze meteen te kunnen tonen (zie [PageCache]). */
+    private val pageCache: PageCache? = null,
 ) {
     private val _loggedIn = MutableStateFlow(false)
     val loggedIn: StateFlow<Boolean> = _loggedIn
@@ -153,12 +155,61 @@ class ForumRepository(
         val html = getAsMember(url)
         if (needsLogin && !ForumParser.isLoggedIn(html)) throw NotLoggedInException()
         track(html)
+        store(url, html)
         return withContext(Dispatchers.Default) { ForumParser.parseTopics(html, url) }
     }
+
+    // ---------- Bewaarde pagina's (eerst tonen, dan verversen) ----------
+
+    /** Per account apart, zodat je na uitloggen niet ziet wat alleen voor leden is. */
+    private fun cacheKey(url: String) = (_username.value ?: "-") + "|" + url.substringBefore('#')
+
+    private suspend fun store(url: String, html: String) {
+        val cache = pageCache ?: return
+        withContext(Dispatchers.IO) { cache.put(cacheKey(url), html) }
+    }
+
+    private suspend fun cached(url: String): String? {
+        val cache = pageCache ?: return null
+        return withContext(Dispatchers.IO) { cache.get(cacheKey(url)) }
+    }
+
+    private fun listUrl(baseUrl: String, page: Int, perPage: Int) =
+        if (page <= 1) baseUrl else baseUrl + (if ('?' in baseUrl) "&" else "?") + "start=${(page - 1) * perPage}"
+
+    /** Bewaarde versie van een lijst met onderwerpen, of null. */
+    suspend fun cachedTopicList(baseUrl: String, page: Int, perPage: Int): TopicsPage? {
+        val url = listUrl(baseUrl, page, perPage)
+        val html = cached(url) ?: return null
+        return withContext(Dispatchers.Default) { runCatching { ForumParser.parseTopics(html, url) }.getOrNull() }
+    }
+
+    suspend fun cachedForumIndex(): List<Section>? {
+        val html = cached(INDEX_URL) ?: return null
+        return withContext(Dispatchers.Default) { runCatching { ForumParser.parseIndex(html, INDEX_URL) }.getOrNull() }
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    /** Bewaarde pagina van een onderwerp, of null. */
+    suspend fun cachedTopicPage(url: String): TopicPage? {
+        val html = cached(url) ?: return null
+        return withContext(Dispatchers.Default) { runCatching { ForumParser.parseTopic(html, url) }.getOrNull() }
+            ?.takeIf { it.posts.isNotEmpty() }
+    }
+
+    /** Bewaarde laatste pagina van een onderwerp (voor nieuw → oud), of null. */
+    suspend fun cachedLastTopicPage(baseUrl: String): TopicPage? {
+        val html = cached(lastPageKey(baseUrl)) ?: return null
+        return withContext(Dispatchers.Default) { runCatching { ForumParser.parseTopic(html, baseUrl) }.getOrNull() }
+            ?.takeIf { it.posts.isNotEmpty() }
+    }
+
+    private fun lastPageKey(baseUrl: String) = ForumParser.baseTopicUrl(baseUrl) + "?laatste"
 
     suspend fun forumIndex(): List<Section> {
         val html = getAsMember(INDEX_URL)
         track(html)
+        store(INDEX_URL, html)
         return withContext(Dispatchers.Default) { ForumParser.parseIndex(html, INDEX_URL) }
     }
 
@@ -185,6 +236,10 @@ class ForumRepository(
         val html = getAsMember(url)
         val page = withContext(Dispatchers.Default) { ForumParser.parseTopic(html, url) }
         track(html)
+        if (page.posts.isNotEmpty()) {
+            store(url, html)
+            if (page.page >= page.totalPages) store(lastPageKey(url), html)
+        }
         debugDump?.invoke(if (page.loggedIn) "topic_ingelogd" else "topic_gast", html)
         return page
     }
@@ -195,6 +250,7 @@ class ForumRepository(
     suspend fun login(username: String, password: String) = loginMutex.withLock {
         // Schone sessie, zodat altijd met het opgegeven account wordt ingelogd.
         cookies.clear()
+        if (username.trim() != _username.value) pageCache?.clear()
         val home = get("$BASE/")
         val (action, hidden) = ForumParser.loginForm(home)
             ?: throw ForumException("Inlogformulier niet gevonden op de website")
@@ -251,6 +307,7 @@ class ForumRepository(
 
     fun logout() {
         cookies.clear()
+        pageCache?.clear()
         credentials.clear()
         _username.value = null
         _loggedIn.value = false

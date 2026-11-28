@@ -149,12 +149,27 @@ class TopicViewModel(
     ) {
         job?.cancel()
         job = viewModelScope.launch {
+            val fresh = _state.value.posts.isEmpty()
             _state.update { it.copy(loading = initial, refreshing = !initial, error = null) }
+            // Eerst de bewaarde versie tonen (meteen), dan de nieuwe ophalen.
+            var shownTarget: String? = null
+            if (initial && fresh) {
+                val cachedPage = when {
+                    startPage != null -> app.forum.cachedTopicPage(pageUrl(startPage))
+                    linkStart > 0 -> app.forum.cachedTopicPage("$baseUrl?start=$linkStart")
+                    order == PostOrder.OLDEST_FIRST -> app.forum.cachedTopicPage(baseUrl)
+                    else -> app.forum.cachedLastTopicPage(baseUrl)
+                }
+                if (cachedPage != null) {
+                    show(cachedPage, order, startPage, scrollTo, resuming, refreshing = true)
+                    shownTarget = _state.value.scrollTo ?: TopicState.SCROLL_TOP
+                }
+            }
             runCatching {
                 val first: TopicPage = when {
                     startPage != null -> app.forum.topicPage(pageUrl(startPage))
                     // Link naar een bepaalde pagina/bericht: die pagina, in beide volgordes.
-                    linkStart > 0 && _state.value.posts.isEmpty() ->
+                    linkStart > 0 && fresh ->
                         app.forum.topicPage("$baseUrl?start=$linkStart")
                     order == PostOrder.OLDEST_FIRST -> app.forum.topicPage(baseUrl)
                     else -> {
@@ -170,28 +185,38 @@ class TopicViewModel(
                 }
                 first
             }.onSuccess { page ->
-                apply(page)
-                remember(page)
-                val next = if (order == PostOrder.NEWEST_FIRST) page.page - 1 else page.page + 1
-                val target = scrollTo?.takeIf { t -> t == TopicState.SCROLL_TOP || page.posts.any { p -> p.id == t } }
-                // Melding alleen als je niet toch al bij het begin (of het nieuwste) zou uitkomen.
-                val startOfList = if (order == PostOrder.NEWEST_FIRST) page.page >= page.totalPages else page.page <= 1
-                val showResumed = resuming && (!startOfList || (target != null && ordered(page, order).firstOrNull()?.id != target))
-                _state.update {
-                    it.copy(
-                        posts = ordered(page, order),
-                        loadedPages = setOf(page.page),
-                        nextPage = next.takeIf { n -> n in 1..page.totalPages },
-                        loading = false,
-                        refreshing = false,
-                        scrollTo = target ?: if (startPage != null) TopicState.SCROLL_TOP else null,
-                        resumed = showResumed,
-                    )
+                if (shownTarget == null) show(page, order, startPage, scrollTo, resuming, refreshing = false)
+                else {
+                    // De bewaarde versie stond er al (en er is al gescrold): alleen bijwerken, niet opnieuw springen.
+                    val stillThere = shownTarget == TopicState.SCROLL_TOP || page.posts.any { it.id == shownTarget }
+                    show(page, order, startPage, scrollTo.takeIf { !stillThere }, resuming = false, refreshing = false)
                 }
             }.onFailure { e ->
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _state.update { it.copy(loading = false, refreshing = false, error = e.friendly()) }
             }
+        }
+    }
+
+    /** Zet een geladen (of bewaarde) pagina in de lijst, met scrollen en de melding "Verder waar je was gebleven". */
+    private fun show(page: TopicPage, order: PostOrder, startPage: Int?, scrollTo: String?, resuming: Boolean, refreshing: Boolean) {
+        apply(page)
+        remember(page)
+        val next = if (order == PostOrder.NEWEST_FIRST) page.page - 1 else page.page + 1
+        val target = scrollTo?.takeIf { t -> t == TopicState.SCROLL_TOP || page.posts.any { p -> p.id == t } }
+        // Melding alleen als je niet toch al bij het begin (of het nieuwste) zou uitkomen.
+        val startOfList = if (order == PostOrder.NEWEST_FIRST) page.page >= page.totalPages else page.page <= 1
+        val showResumed = resuming && (!startOfList || (target != null && ordered(page, order).firstOrNull()?.id != target))
+        _state.update {
+            it.copy(
+                posts = ordered(page, order),
+                loadedPages = setOf(page.page),
+                nextPage = next.takeIf { n -> n in 1..page.totalPages },
+                loading = false,
+                refreshing = refreshing,
+                scrollTo = target ?: if (startPage != null && scrollTo != null) TopicState.SCROLL_TOP else null,
+                resumed = showResumed || it.resumed,
+            )
         }
     }
 

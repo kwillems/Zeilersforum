@@ -93,7 +93,23 @@ class TopicListViewModel(
         job?.cancel()
         job = viewModelScope.launch {
             _state.update { it.copy(refreshing = !initial, loading = initial, error = null, needsLogin = false) }
-            runCatching { app.forum.topicList(baseUrl, 1, _state.value.perPage, needsLogin) }
+            // Eerst de bewaarde versie tonen (meteen), dan de nieuwe ophalen.
+            if (initial && _state.value.topics.isEmpty()) {
+                app.forum.cachedTopicList(baseUrl, 1, _state.value.perPage)?.let { p ->
+                    _state.update {
+                        TopicListState(
+                            title = p.title, topics = p.topics, subcategories = p.subcategories, createUrl = p.createUrl,
+                            page = p.page, totalPages = p.totalPages, perPage = p.perPage, refreshing = true,
+                        )
+                    }
+                }
+            }
+            runCatching {
+                // Bij het opstarten heeft de app de Recente discussies misschien al opgehaald.
+                val pre = if (initial) app.takeRecentPrefetch(baseUrl) else null
+                pre?.let { d -> runCatching { d.await() }.getOrNull() }
+                    ?: app.forum.topicList(baseUrl, 1, _state.value.perPage, needsLogin)
+            }
                 .onSuccess { p ->
                     _state.update {
                         TopicListState(
@@ -153,6 +169,8 @@ fun TopicListContent(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    // Nieuwe onderwerpen bovenaan na verversen (ook na het tonen van de bewaarde versie) in beeld houden.
+    nl.kwillems.zeilersforum.ui.components.StickToTop(listState, state.topics.firstOrNull()?.id, isItem = { (it as? String)?.startsWith("c") != true })
     val nearEnd by remember {
         derivedStateOf {
             val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0

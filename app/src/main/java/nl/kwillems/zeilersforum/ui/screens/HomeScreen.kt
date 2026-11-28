@@ -257,6 +257,9 @@ class ForumIndexViewModel(private val app: ZfApp) : ViewModel() {
     fun load(initial: Boolean = false) {
         viewModelScope.launch {
             _state.update { it.copy(loading = initial, refreshing = !initial, error = null) }
+            if (initial && _state.value.sections.isEmpty()) {
+                app.forum.cachedForumIndex()?.let { s -> _state.value = IndexState(s, loading = false, refreshing = true) }
+            }
             runCatching { app.forum.forumIndex() }
                 .onSuccess { s -> _state.value = IndexState(s, loading = false) }
                 .onFailure { e -> _state.update { it.copy(loading = false, refreshing = false, error = e.friendly()) } }
