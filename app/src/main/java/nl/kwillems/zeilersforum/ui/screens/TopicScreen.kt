@@ -126,9 +126,12 @@ fun TopicScreen(
 
     LaunchedEffect(refresh) {
         if (refresh) {
-            vm.refresh()
             onRefreshHandled()
-            if (state.order == PostOrder.NEWEST_FIRST) listState.scrollToItem(0)
+            // Na reageren of bewerken staat de nieuwe pagina al klaar; anders (bijv. na inloggen) verversen.
+            if (!vm.showPosted()) {
+                vm.refresh()
+                if (state.order == PostOrder.NEWEST_FIRST) listState.scrollToItem(0)
+            }
         }
     }
     // Naar een bericht scrollen (opgeslagen leespositie, link met #bericht of na "Naar pagina").

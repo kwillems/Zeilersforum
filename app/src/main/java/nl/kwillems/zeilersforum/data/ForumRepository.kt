@@ -429,7 +429,8 @@ class ForumRepository(
     suspend fun editPost(form: PostForm, subject: String, message: String, images: List<Upload>, removeAttachments: Set<String> = emptySet()) {
         val drop = form.attachments.filter { it.id in removeAttachments }.map { it.keepField }.toSet()
         val kept = form.copy(fields = LinkedHashMap(form.fields.filterKeys { it !in drop }))
-        submit(kept, subject.ifBlank { form.subject }, message, images, succeeded = ForumParser::editSucceeded)
+        val mesid = Regex("/edit/(\\d+)").find(form.postUrl)?.groupValues?.get(1)
+        submit(kept, subject.ifBlank { form.subject }, message, images, succeeded = ForumParser::editSucceeded, focusPost = mesid)
     }
 
     /** Verwijdert een eigen bericht via de link "Verwijder" (bevat het beveiligingstoken van de site). */
@@ -453,12 +454,21 @@ class ForumRepository(
     /** Start een nieuw onderwerp; geeft de URL van het nieuwe onderwerp terug (als bekend). */
     suspend fun createTopic(form: PostForm, subject: String, message: String, images: List<Upload>): String? {
         val finalUrl = submit(form, subject.trim(), message, images)
-        return finalUrl.takeIf { Regex("/\\d+-[^/]+").containsMatchIn(it) && !it.contains("/create") }
+        val topicUrl = finalUrl.takeIf { Regex("/\\d+-[^/]+").containsMatchIn(it) && !it.contains("/create") }
+        // Een nieuw onderwerp heeft één pagina: het topicscherm kan die meteen tonen.
+        posted?.takeIf { topicUrl != null && it.topicBase == ForumParser.baseTopicUrl(topicUrl) && it.page.totalPages <= 1 }?.let { p ->
+            synchronized(prefetched) {
+                prefetched[p.topicBase] = System.currentTimeMillis() to kotlinx.coroutines.CompletableDeferred(p.page)
+            }
+        }
+        return topicUrl
     }
 
     private suspend fun submit(
         form: PostForm, subject: String, message: String, images: List<Upload>,
         succeeded: (String) -> Boolean = ForumParser::replySucceeded,
+        /** Bericht om naartoe te springen (bij bewerken); anders je nieuwe bericht. */
+        focusPost: String? = null,
     ): String {
         val text = withAttachmentNumbers(message.trimEnd(), images)
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
@@ -474,7 +484,36 @@ class ForumRepository(
         if (!succeeded(result)) {
             throw ForumException(ForumParser.pageError(result) ?: "Bericht niet geplaatst")
         }
+        rememberPosted(result, finalUrl, focusPost)
         return finalUrl
+    }
+
+    /** Wat het forum na versturen teruggaf: de pagina van het onderwerp met je bericht erin. */
+    class Posted(val topicBase: String, val page: TopicPage, val focusPost: String?)
+
+    @Volatile private var posted: Posted? = null
+
+    /**
+     * Na versturen stuurt het forum je door naar het onderwerp en geeft die pagina meteen mee.
+     * Die wordt bewaard, zodat het topicscherm hem kan tonen zonder opnieuw op te halen.
+     */
+    private suspend fun rememberPosted(html: String, finalUrl: String, focusPost: String?) {
+        val page = withContext(Dispatchers.Default) { runCatching { ForumParser.parseTopic(html, finalUrl) }.getOrNull() }
+            ?.takeIf { it.posts.isNotEmpty() } ?: return
+        val anchor = finalUrl.substringAfter('#', "").takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+        // Je nieuwe bericht: het nummer uit de link, anders het hoogste nummer op de pagina.
+        val focus = focusPost ?: anchor?.takeIf { a -> page.posts.any { it.id == a } }
+            ?: page.posts.maxByOrNull { it.id.toLongOrNull() ?: 0L }?.id
+        store(finalUrl, html)
+        if (page.page >= page.totalPages) store(lastPageKey(finalUrl), html)
+        posted = Posted(ForumParser.baseTopicUrl(finalUrl), page, focus)
+    }
+
+    /** Het resultaat van het laatste versturen voor dit onderwerp, één keer; anders null. */
+    fun takePosted(topicBase: String): Posted? {
+        val p = posted ?: return null
+        posted = null
+        return p.takeIf { it.topicBase == ForumParser.baseTopicUrl(topicBase) }
     }
 
     companion object {

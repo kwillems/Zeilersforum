@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -390,7 +391,8 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
             when {
-                state.loadingForm -> CircularProgressIndicator(Modifier.padding(32.dp))
+                // Bewerken heeft de huidige tekst nodig; reageren kan al terwijl het formulier laadt.
+                state.loadingForm && vm.edit -> CircularProgressIndicator(Modifier.padding(32.dp))
                 state.needsLogin -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(when {
                         vm.edit -> "Je moet ingelogd zijn om een bericht te bewerken."
@@ -399,7 +401,7 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                     })
                     Button(onClick = onLogin, modifier = Modifier.padding(top = 16.dp)) { Text("Inloggen") }
                 }
-                state.form == null -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                state.form == null && !state.loadingForm -> Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(state.error ?: "Het formulier kon niet worden geladen.")
                     Button(onClick = vm::loadForm, modifier = Modifier.padding(top = 16.dp)) { Text("Opnieuw") }
                 }
@@ -407,6 +409,10 @@ fun ReplyScreen(vm: ReplyViewModel, onBack: () -> Unit, onPosted: (newTopicUrl: 
                     Modifier.widthIn(max = 840.dp).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    // Vaste ruimte voor het laadbalkje, zodat het tekstvak niet verspringt als het formulier binnen is.
+                    Box(Modifier.fillMaxWidth().height(4.dp)) {
+                        if (state.loadingForm) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
                     if (vm.newTopic || (vm.edit && state.form?.subjectEditable == true)) OutlinedTextField(
                         value = state.subject,
                         onValueChange = vm::setSubject,

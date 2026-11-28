@@ -289,6 +289,18 @@ class TopicViewModel(
         app.readingPositions.save(topicId, page, postId)
     }
 
+    /**
+     * Na reageren of bewerken: de pagina die het forum terugstuurde meteen tonen en naar je
+     * bericht springen, zonder opnieuw op te halen. false = niets klaar, dan gewoon verversen.
+     */
+    fun showPosted(): Boolean {
+        val p = app.forum.takePosted(baseUrl) ?: return false
+        job?.cancel()
+        val order = _state.value.order
+        show(p.page, order, startPage = null, scrollTo = p.focusPost ?: TopicState.SCROLL_TOP, resuming = false, refreshing = false)
+        return true
+    }
+
     fun clearScroll() = _state.update { it.copy(scrollTo = null) }
     fun clearResumed() = _state.update { it.copy(resumed = false) }
 
